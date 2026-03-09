@@ -1,0 +1,30 @@
+:root {
+    /* Paleta de colores oficial */
+    --color-primario: #db137a;
+    --color-blanco: #ffffff;
+    --color-negro: #000000;
+    
+    /* Colores de apoyo UI */
+    --color-fondo: #f4f6f8;
+    --color-borde: #e2e8f0;
+    --color-texto: #334155;
+    --color-texto-suave: #64748b;
+    --color-exito: #10b981;
+    --color-peligro: #ef4444;
+    --color-advertencia: #f59e0b;
+
+    /* Tipografías */
+    --fuente-titulos: 'Bree Serif', serif;
+    --fuente-cuerpo: 'Poppins', sans-serif;
+
+    /* Espaciados y estructura */
+    --espaciado-xs: 4px;
+    --espaciado-sm: 8px;
+    --espaciado-md: 16px;
+    --espaciado-lg: 24px;
+    --espaciado-xl: 32px;
+
+    /* Sombras y bordes */
+    --sombra-tarjeta: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --radio-borde: 8px;
+}

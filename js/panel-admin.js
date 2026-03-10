@@ -1,13 +1,18 @@
-// --- 1. VALIDACIÓN DE SEGURIDAD (CANDADO) ---
-const sessionData = localStorage.getItem('cupissa_admin_session');
-if (!sessionData) {
-    // Si no hay sesión, lo expulsamos inmediatamente antes de que cargue algo
-    window.location.href = 'login.html';
-    throw new Error("Acceso denegado. Redirigiendo al login...");
+// DOBLE VALIDACIÓN POR SI FALLA EL HTML
+if (!localStorage.getItem('cupissa_admin_session')) {
+    window.location.replace('/login.html');
 }
 
-// Extraemos los datos del usuario logueado para usarlos en el panel
-const usuarioActual = JSON.parse(sessionData);
+// ... aquí sigue el resto de tu código panel-admin.js ...
+let usuarioActual = { nombre: "Admin", rol: "ADMIN", email: "admin@cupissa.com" };
+
+if (sessionData) {
+    try {
+        usuarioActual = JSON.parse(sessionData);
+    } catch(e) {
+        console.error("Error leyendo sesión.");
+    }
+}
 
 /**
  * CUPISSA - Panel Admin
@@ -23,7 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const navButtons = document.querySelectorAll('.nav-btn');
     const sectionTitle = document.getElementById('section-title');
-    const btnLogout = document.getElementById('btn-logout');
 
     // Mapeo de Módulos
     const modules = {
@@ -48,15 +52,21 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (modules[target]) {
                 modules[target]();
+            } else {
+                console.error(`Módulo ${target} no encontrado`);
             }
         });
     });
 
-    // --- 3. GESTIÓN DE LOGOUT (CERRAR SESIÓN DE VERDAD) ---
-
     // Inicialización por defecto
     if (window.renderDashboard) {
         window.renderDashboard();
+    } else {
+        // Fallback si no carga dashboard
+        window.renderPlaceholder = function(nombre) {
+            document.getElementById('dynamic-content').innerHTML = `<div class="card"><h2>${nombre}</h2><p>Módulo en desarrollo.</p></div>`;
+        }
+        window.renderPlaceholder('Dashboard');
     }
 
     // Soporte PWA (Instalación)
@@ -83,102 +93,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Registrar Service Worker
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .catch(err => console.warn('Error al registrar SW', err));
-    });
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    const navButtons = document.querySelectorAll('.nav-btn');
-    const sectionTitle = document.getElementById('section-title');
-    const btnLogout = document.getElementById('btn-logout');
-
-    // 1. Mapeo de Módulos
-    const modules = {
-        dashboard: window.renderDashboard,
-        productos: window.renderProductos,
-        pedidos: window.renderPedidos,
-        usuarios: window.renderUsuarios,
-        marketing: () => window.renderPlaceholder('Marketing'),
-        comisiones: () => window.renderPlaceholder('Comisiones'),
-        reportes: () => window.renderPlaceholder('Reportes')
-    };
-
-    // 2. Lógica de Navegación
-    navButtons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const button = e.currentTarget;
-            const target = button.getAttribute('data-target');
-
-            // Actualizar UI
-            navButtons.forEach(b => b.classList.remove('active'));
-            button.classList.add('active');
-            sectionTitle.textContent = button.textContent;
-            
-            // Cargar Función del Módulo
-            if (modules[target]) {
-                modules[target]();
-            } else {
-                console.error(`Módulo ${target} no encontrado`);
-            }
-        });
-    });
-
-    // 3. Gestión de Logout
-    if (btnLogout) {
-        btnLogout.addEventListener('click', () => {
-            // Aquí puedes añadir limpieza de localStorage/sesión
-            window.location.href = 'login.html';
-        });
-    }
-
-    // 4. Inicialización por defecto
-    if (window.renderDashboard) {
-        window.renderDashboard();
-    }
-
-    // 5. Soporte PWA (Instalación)
-    let deferredPrompt;
-    const btnInstalar = document.getElementById('btn-instalar-pwa');
-
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        if (btnInstalar) btnInstalar.style.display = 'block';
-    });
-
-    if (btnInstalar) {
-        btnInstalar.addEventListener('click', async () => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') {
-                    btnInstalar.style.display = 'none';
-                }
-                deferredPrompt = null;
-            }
-        });
-    }
-});
-
-// Registrar Service Worker
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('SW registrado', reg))
-            .catch(err => console.warn('Error al registrar SW', err));
-    });
-}
-
 // --- FUNCIÓN GLOBAL PARA CERRAR SESIÓN ---
 window.cerrarSesionAdmin = function() {
-    // 1. Borramos TODOS los rastros de sesión
+    console.log("Cerrando sesión de forma segura...");
     localStorage.removeItem('cupissa_admin_session');
-    localStorage.clear(); // Limpieza extrema por si acaso
-    
-    // 2. Redirigimos al login (Replace evita que puedan volver atrás)
-    window.location.replace('/login.html');
+    window.location.replace('login.html');
 };
+
+// Registrar Service Worker
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .catch(err => console.warn('Error al registrar SW', err));
+    });
+}

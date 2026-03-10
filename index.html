@@ -43,7 +43,11 @@
                 <button class="nav-btn" data-target="reportes">Reportes</button>
             </nav>
             <div class="sidebar-footer">
-                <button id="btn-instalar-pwa" class="btn-secundario" style="display: none; width: 100%; margin-bottom: 10px;">Descargar App</button>
+                <style>
+        /* ... tu CSS del login que ya tienes ... */
+        .btn-descarga { width: 100%; padding: 12px; background: var(--color-fondo); color: var(--color-texto); border: 1px solid var(--color-borde); border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; margin-top: 15px; transition: all 0.3s; display: block; } /* display: block forzado */
+        .btn-descarga:hover { border-color: var(--color-primario); color: var(--color-primario); }
+    </style>
                 <button id="btn-logout" class="btn-secundario" style="width: 100%; border-color: transparent;" onclick="cerrarSesionAdmin()">Cerrar Sesión</button>
             </div>
         </aside>

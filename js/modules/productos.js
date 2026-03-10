@@ -1,4 +1,5 @@
 window.productosGlobales = [];
+window.variacionesGlobales = []; // Aseguramos que exista
 
 window.renderProductos = function() {
     const dynamicContent = document.getElementById('dynamic-content');
@@ -61,6 +62,7 @@ async function cargarProductos() {
         
         if (data.success && data.productos) {
             window.productosGlobales = data.productos;
+            if (data.variaciones) window.variacionesGlobales = data.variaciones; // Guardamos las globales
             renderizarTablaProductos(window.productosGlobales);
         } else {
             tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--color-peligro);">Error: ${data.error || 'No se pudieron cargar los productos.'}</td></tr>`;
@@ -72,7 +74,6 @@ async function cargarProductos() {
     }
 }
 
-// --- NUEVO: REFERENCIA AUTOMÁTICA ---
 function generarSiguienteReferencia() {
     const anioActual = new Date().getFullYear();
     const prefijo = `CUP${anioActual}`;
@@ -179,12 +180,12 @@ window.editarProducto = function(referencia) {
 window.abrirModalProducto = function(productoEdicion = null) {
     const esEdicion = productoEdicion !== null;
     const titulo = esEdicion ? `Editar Producto: ${productoEdicion.ref}` : "Crear Nuevo Producto";
-    const refCalculada = esEdicion ? productoEdicion.ref : generarSiguienteReferencia(); // NUEVO: Genera REF
+    const refCalculada = esEdicion ? productoEdicion.ref : generarSiguienteReferencia(); 
     
     const vals = {
         activo: 'SI', nombre: '', mundo: '', categoria: '', subcategoria: '', tallas: '',
         tematica: '', temporada: '', x_temp: '', para_quien: '', modalidad: '', precio: 0,
-        seo_alt: '' // NUEVO: SEO
+        seo_alt: ''
     };
 
     if (esEdicion) {
@@ -200,7 +201,42 @@ window.abrirModalProducto = function(productoEdicion = null) {
         vals.para_quien = productoEdicion['¿Para quien?'] || '';
         vals.modalidad = productoEdicion['*modalidad'] || '';
         vals.precio = productoEdicion['*precio_base'] || 0;
-        vals.seo_alt = productoEdicion.seo_alt || ''; // NUEVO: SEO
+        vals.seo_alt = productoEdicion.seo_alt || ''; 
+    }
+
+    // 1. CARGAR SELECT DINÁMICO DE PRECONFIGURACIONES
+    let opcionesPreconfig = '<option value="">Cargar preconfiguración...</option>';
+    const gruposPreconfig = {};
+    if (window.variacionesGlobales) {
+        window.variacionesGlobales.forEach(vg => {
+            const llave = vg.columna; 
+            if (!gruposPreconfig[llave]) gruposPreconfig[llave] = [];
+            gruposPreconfig[llave].push(vg);
+        });
+        for (const llave in gruposPreconfig) {
+            const partes = llave.split('|');
+            const nombreAmigable = partes[partes.length - 1] || llave;
+            opcionesPreconfig += `<option value="${llave}">${llave} (${nombreAmigable})</option>`;
+        }
+    }
+
+    // 2. EXTRAER VALORES MANUALES PARA EL AUTOCOMPLETADO
+    const columnasUnicas = new Set();
+    const valoresUnicos = new Set();
+    if (window.productosGlobales) {
+        window.productosGlobales.forEach(p => {
+            if (p.variaciones) {
+                try {
+                    const vJson = typeof p.variaciones === 'string' ? JSON.parse(p.variaciones) : p.variaciones;
+                    if (Array.isArray(vJson)) {
+                        vJson.forEach(v => {
+                            if (v.columna) columnasUnicas.add(v.columna);
+                            if (v.valor || v.variacion) valoresUnicos.add(v.valor || v.variacion);
+                        });
+                    }
+                } catch(e){}
+            }
+        });
     }
 
     const modalHtml = `
@@ -283,9 +319,7 @@ window.abrirModalProducto = function(productoEdicion = null) {
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                             <h3>Variaciones e Incrementos</h3>
                             <select id="select-preconfig" style="padding: 5px; border-radius: 4px; border: 1px solid var(--color-borde);">
-                                <option value="">Cargar preconfiguración...</option>
-                                <option value="ninos">Modalidad|¿Para quien?|tallas (Niños)</option>
-                                <option value="conjuntos">categoria|personalizable|tallas (Conjuntos)</option>
+                                ${opcionesPreconfig}
                             </select>
                         </div>
                         <button type="button" class="btn-primario" id="btn-add-variacion" style="margin-bottom: 10px;">+ Variación Manual</button>
@@ -314,6 +348,13 @@ window.abrirModalProducto = function(productoEdicion = null) {
                 </div>
             </div>
         </div>
+
+        <datalist id="lista-columnas-var">
+            ${Array.from(columnasUnicas).map(c => `<option value="${c}">`).join('')}
+        </datalist>
+        <datalist id="lista-valores-var">
+            ${Array.from(valoresUnicos).map(v => `<option value="${v}">`).join('')}
+        </datalist>
     `;
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
@@ -330,12 +371,20 @@ function inicializarLogicaModal(productoEdicion) {
     modal.addEventListener('click', (e) => { if (e.target === modal) cerrarModal(); });
 
     const tbodyVariaciones = document.getElementById('tbody-variaciones');
-    const agregarFilaVariacion = (columna = '', valor = '', incremento = '0') => {
+    
+    // MODIFICADO: Agrega el atributo "tipo" para distinguir entre manual y preconfigurada
+    const agregarFilaVariacion = (columna = '', valor = '', incremento = '0', tipo = 'manual') => {
         const tr = document.createElement('tr');
+        tr.dataset.tipo = tipo; 
+        
+        // Estilos para diferenciar visualmente las preconfiguradas de las manuales
+        const readonlyAttr = tipo === 'preconfigurada' ? 'readonly' : '';
+        const bgStyle = tipo === 'preconfigurada' ? 'background: #f0fdf4; color: #166534; font-size:12px; font-weight:600;' : '';
+
         tr.innerHTML = `
-            <td><input type="text" value="${columna}" class="var-columna"></td>
-            <td><input type="text" value="${valor}" class="var-valor"></td>
-            <td><input type="number" value="${incremento}" class="var-incremento"></td>
+            <td><input type="text" value="${columna}" class="var-columna" list="lista-columnas-var" ${readonlyAttr} style="${bgStyle}"></td>
+            <td><input type="text" value="${valor}" class="var-valor" list="lista-valores-var" ${readonlyAttr} style="${bgStyle}"></td>
+            <td><input type="number" value="${incremento}" class="var-incremento" ${readonlyAttr} style="${bgStyle}"></td>
             <td><button type="button" class="btn-accion btn-eliminar btn-del-var">X</button></td>
         `;
         tbodyVariaciones.appendChild(tr);
@@ -345,18 +394,28 @@ function inicializarLogicaModal(productoEdicion) {
         if (e.target.classList.contains('btn-del-var')) e.target.closest('tr').remove();
     });
 
-    document.getElementById('btn-add-variacion').addEventListener('click', () => agregarFilaVariacion());
+    document.getElementById('btn-add-variacion').addEventListener('click', () => agregarFilaVariacion('', '', '0', 'manual'));
 
+    // CARGAR VARIACIONES EXISTENTES AL EDITAR
+    if (productoEdicion && productoEdicion.variaciones) {
+        try {
+            const vJson = typeof productoEdicion.variaciones === 'string' ? JSON.parse(productoEdicion.variaciones) : productoEdicion.variaciones;
+            if (Array.isArray(vJson)) {
+                vJson.forEach(v => agregarFilaVariacion(v.columna, v.valor || v.variacion, v.incremento, 'manual'));
+            }
+        } catch(e) {}
+    }
+
+    // MODIFICADO: Agrega las filas preconfiguradas buscando en las globales
     document.getElementById('select-preconfig').addEventListener('change', (e) => {
-        if (e.target.value === 'ninos') {
-            agregarFilaVariacion('Modalidad|¿Para quien?|tallas', 'Compra|NIÑOS|2-4', '35000');
-            agregarFilaVariacion('Modalidad|¿Para quien?|tallas', 'Compra|NIÑOS|6-8', '45000');
-            agregarFilaVariacion('Modalidad|¿Para quien?|tallas', 'Compra|NIÑOS|10-12', '50000');
-            agregarFilaVariacion('Modalidad|¿Para quien?|tallas', 'Compra|NIÑOS|14-16', '60000');
-        } else if (e.target.value === 'conjuntos') {
-            agregarFilaVariacion('categoria|personalizable (si/no)|tallas', 'Conjuntos|si|6-8', '5000');
-            agregarFilaVariacion('categoria|personalizable (si/no)|tallas', 'Conjuntos|si|10-12', '10000');
-            agregarFilaVariacion('categoria|personalizable (si/no)|tallas', 'Conjuntos|si|14-16', '15000');
+        const llaveSeleccionada = e.target.value;
+        if (!llaveSeleccionada) return;
+
+        if (window.variacionesGlobales) {
+            const variacionesGrupo = window.variacionesGlobales.filter(vg => vg.columna === llaveSeleccionada);
+            variacionesGrupo.forEach(vg => {
+                agregarFilaVariacion(vg.columna, vg.valor, vg.incremento, 'preconfigurada');
+            });
         }
         e.target.value = '';
     });
@@ -443,18 +502,21 @@ function inicializarLogicaModal(productoEdicion) {
 
         const variaciones = [];
         document.querySelectorAll('#tbody-variaciones tr').forEach(tr => {
-            variaciones.push({
-                columna: tr.querySelector('.var-columna').value,
-                valor: tr.querySelector('.var-valor').value,
-                incremento: tr.querySelector('.var-incremento').value
-            });
+            // MODIFICADO: Solo capturamos las marcadas como MANUALES para no duplicar en el backend
+            if (tr.dataset.tipo === 'manual') {
+                variaciones.push({
+                    columna: tr.querySelector('.var-columna').value,
+                    valor: tr.querySelector('.var-valor').value,
+                    incremento: tr.querySelector('.var-incremento').value
+                });
+            }
         });
 
         const productoPayload = {
-            ref: document.getElementById('prod-ref').value, // NUEVO: Se envía la REF
+            ref: document.getElementById('prod-ref').value, 
             activo: document.getElementById('prod-activo').value,
             producto: document.getElementById('prod-nombre').value,
-            seo_alt: document.getElementById('prod-seo-alt').value, // NUEVO: Se envía el SEO
+            seo_alt: document.getElementById('prod-seo-alt').value, 
             mundo: document.getElementById('prod-mundo').value,
             categoria: document.getElementById('prod-categoria').value,
             subcategoria: document.getElementById('prod-subcategoria').value,

@@ -89,7 +89,6 @@ function generarSiguienteReferencia() {
     return `${prefijo}${String(max + 1).padStart(3, '0')}`;
 }
 
-// NUEVO RENDERIZADO: Con conversor de URLs de Drive a imagen
 function renderizarTablaProductos(productos) {
     const tbody = document.getElementById('tabla-productos-body');
     tbody.innerHTML = '';
@@ -103,19 +102,17 @@ function renderizarTablaProductos(productos) {
         const estado = prod['*activ'] || prod['*activo'] || 'NO';
         const claseEstado = estado.toUpperCase() === 'SI' ? 'estado-activo' : 'estado-inactivo';
         
-        // Usamos tu logo local como respaldo seguro
         let urlImagen = '/assets/logo.png'; 
         
         if (prod.imagenurl && prod.imagenurl.trim() !== '') {
             let primeraUrl = prod.imagenurl.split('|')[0].trim();
             
-            // Convertir enlaces compartidos de Google Drive a enlaces directos de imagen
             if (primeraUrl.includes('drive.google.com/file/d/')) {
                 const fileId = primeraUrl.split('/d/')[1].split('/')[0];
-                urlImagen = `https://drive.google.com/uc?export=view&id=${fileId}`;
+                urlImagen = `https://lh3.googleusercontent.com/d/${fileId}`;
             } else if (primeraUrl.includes('drive.google.com/open?id=')) {
                 const fileId = primeraUrl.split('id=')[1].split('&')[0];
-                urlImagen = `https://drive.google.com/uc?export=view&id=${fileId}`;
+                urlImagen = `https://lh3.googleusercontent.com/d/${fileId}`;
             } else if (primeraUrl.startsWith('assets/')) {
                 urlImagen = '/' + primeraUrl;
             } else {
@@ -144,12 +141,43 @@ function renderizarTablaProductos(productos) {
                     <button class="btn-accion btn-ocultar" onclick="window.toggleEstadoProducto(this, '${prod.ref}', '${estado}')">
                         ${estado.toUpperCase() === 'SI' ? 'Ocultar' : 'Activar'}
                     </button>
+                    <button class="btn-accion btn-eliminar" onclick="window.eliminarProducto('${prod.ref}')">Eliminar</button>
                 </div>
             </td>
         `;
         tbody.appendChild(tr);
     });
 }
+
+// --- NUEVA FUNCIÓN PARA ELIMINAR ---
+window.eliminarProducto = async function(referencia) {
+    if (!confirm(`⚠️ ¿Estás segura de que deseas ELIMINAR permanentemente el producto ${referencia}? Esta acción borrará el registro de la base de datos.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(CUPISSA_CONFIG.API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ 
+                action: 'eliminarProducto', 
+                ref: referencia 
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            window.mostrarToast(`Producto ${referencia} eliminado correctamente.`, "exito");
+            // Quitamos el producto de la lista global y recargamos la tabla
+            window.productosGlobales = window.productosGlobales.filter(p => p.ref !== referencia);
+            document.getElementById('buscador-productos').dispatchEvent(new Event('input'));
+        } else {
+            window.mostrarToast("Error: " + data.error, "error");
+        }
+    } catch (error) {
+        window.mostrarToast("Error de conexión: " + error.message, "error");
+    }
+};
 
 window.toggleEstadoProducto = async function(btn, referencia, estadoActual) {
     const textoOriginal = btn.textContent;
@@ -530,7 +558,6 @@ function inicializarLogicaModal(productoEdicion) {
         btnSubmit.textContent = "Guardando...";
         btnSubmit.disabled = true;
 
-        // Leer los checkboxes de Modalidad
         const cboxModalidad = document.querySelectorAll('.chk-modalidad:checked');
         const modalidadSeleccionada = Array.from(cboxModalidad).map(cb => cb.value).join(', ');
 

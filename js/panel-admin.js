@@ -117,8 +117,54 @@ window.cerrarSesionAdmin = function() {
 };
 
 // SERVICE WORKER
+// --- LÓGICA DE ACTUALIZACIÓN Y SERVICE WORKER ---
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(err => console.warn('SW no cargado', err));
+        navigator.serviceWorker.register('/sw.js').then(reg => {
+            // 1. Busca actualizaciones silenciosamente al cargar
+            reg.update();
+
+            // 2. Si detecta una nueva versión en el servidor
+            reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing;
+                newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        // Muestra una alerta nativa para actualizar
+                        if (confirm("✨ Hay una nueva versión de la App disponible con mejoras. ¿Deseas actualizar ahora?")) {
+                            newWorker.postMessage('SKIP_WAITING');
+                        }
+                    }
+                });
+            });
+        }).catch(err => console.warn('SW no cargado', err));
+
+        // 3. Cuando el nuevo Service Worker toma el control, recarga la página sola
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (!refreshing) {
+                window.location.reload();
+                refreshing = true;
+            }
+        });
+    });
+}
+
+// 4. Lógica del Botón Manual "Actualizar App"
+const btnActualizar = document.getElementById('btn-actualizar-app');
+if (btnActualizar) {
+    btnActualizar.addEventListener('click', () => {
+        btnActualizar.textContent = "Actualizando...";
+        
+        // Borramos todo el caché guardado por la PWA
+        if ('caches' in window) {
+            caches.keys().then(names => {
+                for (let name of names) caches.delete(name);
+            });
+        }
+        
+        // Forzamos la recarga limpia desde el servidor
+        setTimeout(() => {
+            window.location.reload(true);
+        }, 500);
     });
 }

@@ -1,9 +1,24 @@
 <!DOCTYPE html>
 <html lang="es">
-<head>
+    <head>
+    <style id="seguridad-cupissa">html { display: none !important; }</style>
+    
+    <script>
+        (function() {
+            var sesion = localStorage.getItem('cupissa_admin_session');
+            if (!sesion || sesion === "undefined" || sesion === "null") {
+                // Si no hay llave, forzamos redirección absoluta a login
+                window.location.replace('/login.html');
+            } else {
+                // Si sí hay llave, destruimos el bloqueador visual para que cargue el panel
+                document.getElementById('seguridad-cupissa').remove();
+            }
+        })();
+    </script>
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CUPISSA | Panel Admin</title>
+    </script>
     
     <link href="https://fonts.googleapis.com/css2?family=Bree+Serif&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">

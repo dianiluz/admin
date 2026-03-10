@@ -47,3 +47,10 @@ self.addEventListener('fetch', (e) => {
             })
     );
 });
+
+// --- NUEVO: Escucha la orden para actualizarse inmediatamente ---
+self.addEventListener('message', (event) => {
+    if (event.data === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+});

@@ -4,11 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CUPISSA | Panel Admin</title>
+    
     <link href="https://fonts.googleapis.com/css2?family=Bree+Serif&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+    
     <link rel="stylesheet" href="css/variables.css">
     <link rel="stylesheet" href="css/panel.css">
+    
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" href="/assets/favicon.png">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
     <div class="admin-layout">
@@ -16,7 +24,7 @@
             <div class="logo-container">
                 <img src="/assets/logo.png" alt="Cupissa Logo" class="logo">
             </div>
-            <nav class="admin-nav">
+            <nav class="admin-nav" id="main-nav">
                 <button class="nav-btn active" data-target="dashboard">Dashboard</button>
                 <button class="nav-btn" data-target="productos">Productos</button>
                 <button class="nav-btn" data-target="pedidos">Pedidos</button>
@@ -26,28 +34,26 @@
                 <button class="nav-btn" data-target="reportes">Reportes</button>
             </nav>
             <div class="sidebar-footer">
-                <button id="btn-instalar-pwa" style="display: none;">Instalar App</button>
-                <button id="btn-logout">Cerrar Sesión</button>
+                <button id="btn-instalar-pwa" class="btn-secundario" style="display: none; width: 100%; margin-bottom: 10px;">Descargar App</button>
+                <button id="btn-logout" class="btn-secundario" style="width: 100%; border-color: transparent;">Cerrar Sesión</button>
             </div>
         </aside>
+
         <main class="content-area">
             <header class="top-bar">
-                <h1 id="section-title" style="font-family: 'Bree Serif', serif;">Dashboard</h1>
+                <h1 id="section-title">Dashboard</h1>
                 <div class="user-info">admin@cupissa.com</div>
             </header>
-            <div id="dynamic-content" class="module-container" style="font-family: 'Poppins', sans-serif;">
+            <div id="dynamic-content" class="module-container">
                 </div>
         </main>
     </div>
     
     <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/modules/dashboard.js"></script>
+    <script src="js/modules/productos.js"></script>
+    <script src="js/modules/pedidos.js"></script>
     <script src="js/panel-admin.js"></script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js');
-            });
-        }
-    </script>
 </body>
 </html>

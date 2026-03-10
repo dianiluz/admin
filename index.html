@@ -1,23 +1,20 @@
 <!DOCTYPE html>
 <html lang="es">
-    <head>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CUPISSA | Panel Admin</title>
+
     <style id="seguridad-cupissa">html { display: none !important; }</style>
-    
     <script>
         (function() {
             var sesion = localStorage.getItem('cupissa_admin_session');
             if (!sesion || sesion === "undefined" || sesion === "null") {
-                // Si no hay llave, forzamos redirección absoluta a login
-                window.location.replace('/login.html');
+                window.location.replace('login.html');
             } else {
-                // Si sí hay llave, destruimos el bloqueador visual para que cargue el panel
                 document.getElementById('seguridad-cupissa').remove();
             }
         })();
-    </script>
-
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     </script>
     
     <link href="https://fonts.googleapis.com/css2?family=Bree+Serif&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
@@ -27,15 +24,12 @@
     <link rel="stylesheet" href="css/panel.css">
     
     <link rel="manifest" href="/manifest.json">
-    <link rel="icon" href="/assets/favicon.png">
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
+    <div id="mobile-overlay" class="mobile-overlay"></div>
+
     <div class="admin-layout">
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div class="logo-container">
                 <img src="/assets/logo.png" alt="Cupissa Logo" class="logo">
             </div>
@@ -56,7 +50,10 @@
 
         <main class="content-area">
             <header class="top-bar">
-                <h1 id="section-title">Dashboard</h1>
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <button id="btn-menu-mobile" class="hamburger-btn">☰</button>
+                    <h1 id="section-title">Dashboard</h1>
+                </div>
                 <div class="user-info">admin@cupissa.com</div>
             </header>
             <div id="dynamic-content" class="module-container">
@@ -64,6 +61,10 @@
         </main>
     </div>
     
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
     <script src="js/config.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/modules/dashboard.js"></script>

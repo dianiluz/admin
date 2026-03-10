@@ -141,43 +141,12 @@ function renderizarTablaProductos(productos) {
                     <button class="btn-accion btn-ocultar" onclick="window.toggleEstadoProducto(this, '${prod.ref}', '${estado}')">
                         ${estado.toUpperCase() === 'SI' ? 'Ocultar' : 'Activar'}
                     </button>
-                    <button class="btn-accion btn-eliminar" onclick="window.eliminarProducto('${prod.ref}')">Eliminar</button>
                 </div>
             </td>
         `;
         tbody.appendChild(tr);
     });
-}
-
-// --- NUEVA FUNCIÓN PARA ELIMINAR ---
-window.eliminarProducto = async function(referencia) {
-    if (!confirm(`⚠️ ¿Estás segura de que deseas ELIMINAR permanentemente el producto ${referencia}? Esta acción borrará el registro de la base de datos.`)) {
-        return;
     }
-
-    try {
-        const response = await fetch(CUPISSA_CONFIG.API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({ 
-                action: 'eliminarProducto', 
-                ref: referencia 
-            })
-        });
-        
-        const data = await response.json();
-        if (data.success) {
-            window.mostrarToast(`Producto ${referencia} eliminado correctamente.`, "exito");
-            // Quitamos el producto de la lista global y recargamos la tabla
-            window.productosGlobales = window.productosGlobales.filter(p => p.ref !== referencia);
-            document.getElementById('buscador-productos').dispatchEvent(new Event('input'));
-        } else {
-            window.mostrarToast("Error: " + data.error, "error");
-        }
-    } catch (error) {
-        window.mostrarToast("Error de conexión: " + error.message, "error");
-    }
-};
 
 window.toggleEstadoProducto = async function(btn, referencia, estadoActual) {
     const textoOriginal = btn.textContent;
@@ -429,6 +398,24 @@ function inicializarLogicaModal(productoEdicion) {
     const tbodyVariaciones = document.getElementById('tbody-variaciones');
     
     const agregarFilaVariacion = (columna = '', valor = '', incremento = '0', tipo = 'manual') => {
+        // --- LÓGICA ANTI-DUPLICADOS ---
+        const filasExistentes = tbodyVariaciones.querySelectorAll('tr');
+        let esDuplicado = false;
+        
+        filasExistentes.forEach(tr => {
+            const colExistente = tr.querySelector('.var-columna').value.trim().toLowerCase();
+            const valExistente = tr.querySelector('.var-valor').value.trim().toLowerCase();
+            
+            if (columna !== '' && valor !== '' && colExistente === columna.trim().toLowerCase() && valExistente === valor.trim().toLowerCase()) {
+                esDuplicado = true;
+            }
+        });
+
+        if (esDuplicado) {
+            return; // Si ya existe, aborta y no agrega la fila repetida
+        }
+        // ------------------------------
+
         const tr = document.createElement('tr');
         tr.dataset.tipo = tipo; 
         
@@ -559,7 +546,8 @@ function inicializarLogicaModal(productoEdicion) {
         btnSubmit.disabled = true;
 
         const cboxModalidad = document.querySelectorAll('.chk-modalidad:checked');
-        const modalidadSeleccionada = Array.from(cboxModalidad).map(cb => cb.value).join(', ');
+let modalidadValues = Array.from(cboxModalidad).map(cb => cb.value);
+const modalidadSeleccionada = modalidadValues.length > 0 ? '#' + modalidadValues.join('|') : '';
 
         const variaciones = [];
         document.querySelectorAll('#tbody-variaciones tr').forEach(tr => {

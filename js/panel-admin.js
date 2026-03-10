@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dashboard: window.renderDashboard,
         productos: window.renderProductos,
         pedidos: window.renderPedidos,
-        usuarios: () => window.renderPlaceholder('Usuarios'),
+        usuarios: window.renderUsuarios,
         marketing: () => window.renderPlaceholder('Marketing'),
         comisiones: () => window.renderPlaceholder('Comisiones'),
         reportes: () => window.renderPlaceholder('Reportes')

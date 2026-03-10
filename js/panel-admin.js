@@ -53,13 +53,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- 3. GESTIÓN DE LOGOUT (CERRAR SESIÓN DE VERDAD) ---
-    if (btnLogout) {
-        btnLogout.addEventListener('click', () => {
-            // Destruimos la sesión del navegador
-            localStorage.removeItem('cupissa_admin_session');
-            window.location.href = 'login.html';
-        });
-    }
 
     // Inicialización por defecto
     if (window.renderDashboard) {
@@ -179,3 +172,16 @@ if ('serviceWorker' in navigator) {
             .catch(err => console.warn('Error al registrar SW', err));
     });
 }
+
+// --- FUNCIÓN GLOBAL PARA CERRAR SESIÓN ---
+window.cerrarSesionAdmin = function() {
+    console.log("Cerrando sesión de forma segura...");
+    
+    // 1. Destruimos la llave de acceso
+    localStorage.removeItem('cupissa_admin_session');
+    
+    // 2. Redirigimos usando replace() 
+    // Esto borra el panel del historial del navegador, 
+    // así no pueden usar la flecha de "Atrás" para volver a entrar.
+    window.location.replace('login.html');
+};

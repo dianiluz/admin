@@ -175,13 +175,10 @@ if ('serviceWorker' in navigator) {
 
 // --- FUNCIÓN GLOBAL PARA CERRAR SESIÓN ---
 window.cerrarSesionAdmin = function() {
-    console.log("Cerrando sesión de forma segura...");
-    
-    // 1. Destruimos la llave de acceso
+    // 1. Borramos TODOS los rastros de sesión
     localStorage.removeItem('cupissa_admin_session');
+    localStorage.clear(); // Limpieza extrema por si acaso
     
-    // 2. Redirigimos usando replace() 
-    // Esto borra el panel del historial del navegador, 
-    // así no pueden usar la flecha de "Atrás" para volver a entrar.
-    window.location.replace('login.html');
+    // 2. Redirigimos al login (Replace evita que puedan volver atrás)
+    window.location.replace('/login.html');
 };

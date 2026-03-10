@@ -62,7 +62,7 @@ async function cargarProductos() {
         
         if (data.success && data.productos) {
             window.productosGlobales = data.productos;
-            if (data.variaciones) window.variacionesGlobales = data.variaciones; // Guarda variaciones de products.gs
+            if (data.variaciones) window.variacionesGlobales = data.variaciones; 
             renderizarTablaProductos(window.productosGlobales);
         } else {
             tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--color-peligro);">Error: ${data.error || 'No se pudieron cargar los productos.'}</td></tr>`;
@@ -89,6 +89,7 @@ function generarSiguienteReferencia() {
     return `${prefijo}${String(max + 1).padStart(3, '0')}`;
 }
 
+// NUEVO RENDERIZADO: Con conversor de URLs de Drive a imagen
 function renderizarTablaProductos(productos) {
     const tbody = document.getElementById('tabla-productos-body');
     tbody.innerHTML = '';
@@ -102,11 +103,23 @@ function renderizarTablaProductos(productos) {
         const estado = prod['*activ'] || prod['*activo'] || 'NO';
         const claseEstado = estado.toUpperCase() === 'SI' ? 'estado-activo' : 'estado-inactivo';
         
-        let urlImagen = 'https://via.placeholder.com/50x50?text=CUPISSA';
-        if (prod.imagenurl) {
-            urlImagen = prod.imagenurl.split('|')[0].trim();
-            if (urlImagen.startsWith('assets/')) {
-                urlImagen = '/' + urlImagen;
+        // Usamos tu logo local como respaldo seguro
+        let urlImagen = '/assets/logo.png'; 
+        
+        if (prod.imagenurl && prod.imagenurl.trim() !== '') {
+            let primeraUrl = prod.imagenurl.split('|')[0].trim();
+            
+            // Convertir enlaces compartidos de Google Drive a enlaces directos de imagen
+            if (primeraUrl.includes('drive.google.com/file/d/')) {
+                const fileId = primeraUrl.split('/d/')[1].split('/')[0];
+                urlImagen = `https://drive.google.com/uc?export=view&id=${fileId}`;
+            } else if (primeraUrl.includes('drive.google.com/open?id=')) {
+                const fileId = primeraUrl.split('id=')[1].split('&')[0];
+                urlImagen = `https://drive.google.com/uc?export=view&id=${fileId}`;
+            } else if (primeraUrl.startsWith('assets/')) {
+                urlImagen = '/' + primeraUrl;
+            } else {
+                urlImagen = primeraUrl;
             }
         }
 
@@ -115,7 +128,11 @@ function renderizarTablaProductos(productos) {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td><img src="${urlImagen}" alt="${nombre}" class="thumb-producto" onerror="this.onerror=null; this.src='https://via.placeholder.com/50x50?text=CUPISSA';"></td>
+            <td>
+                <div style="width: 50px; height: 50px; border-radius: 4px; overflow: hidden; background: #f4f6f8; display: flex; align-items: center; justify-content: center;">
+                    <img src="${urlImagen}" alt="${nombre}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.onerror=null; this.src='/assets/logo.png';">
+                </div>
+            </td>
             <td>${prod.ref || 'N/A'}</td>
             <td>${nombre}</td>
             <td>${prod.mundo || ''} / ${prod.categoria || ''}</td>
@@ -204,7 +221,6 @@ window.abrirModalProducto = function(productoEdicion = null) {
         vals.seo_alt = productoEdicion.seo_alt || ''; 
     }
 
-    // 1. CARGAR SELECT DINÁMICO DE PRECONFIGURACIONES
     let opcionesPreconfig = '<option value="">Cargar preconfiguración...</option>';
     const gruposPreconfig = {};
     
@@ -226,7 +242,6 @@ window.abrirModalProducto = function(productoEdicion = null) {
         opcionesPreconfig += '<option value="" disabled>⚠️ No se detectaron variaciones en BD</option>';
     }
 
-    // 2. EXTRAER VALORES MANUALES PARA EL AUTOCOMPLETADO
     const columnasUnicas = new Set();
     const valoresUnicos = new Set();
     if (window.productosGlobales) {

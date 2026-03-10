@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceso | Panel Admin CUPISSA</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Bree+Serif&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/variables.css">
+    
+    <style>
+        body { 
+            background-color: var(--color-fondo); 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0; 
+            font-family: var(--fuente-cuerpo); 
+        }
+        .login-wrapper {
+            background: var(--color-blanco); 
+            padding: 40px; 
+            border-radius: var(--radio-borde); 
+            box-shadow: var(--sombra-tarjeta); 
+            width: 90%; 
+            max-width: 400px; 
+            text-align: center; 
+        }
+        .login-wrapper img { max-width: 160px; margin-bottom: 20px; }
+        .login-wrapper h2 { font-family: var(--fuente-titulos); color: var(--color-primario); margin-bottom: 5px; }
+        .login-wrapper p { color: var(--color-texto-suave); font-size: 14px; margin-bottom: 25px; }
+        
+        .form-group { text-align: left; margin-bottom: 15px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; color: var(--color-texto); }
+        .form-group input { width: 100%; padding: 12px; border: 1px solid var(--color-borde); border-radius: 4px; font-family: var(--fuente-cuerpo); font-size: 14px; outline: none; box-sizing: border-box; }
+        .form-group input:focus { border-color: var(--color-primario); }
+        
+        .btn-login { width: 100%; padding: 12px; background: var(--color-primario); color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 16px; margin-top: 10px; transition: opacity 0.3s; }
+        .btn-login:hover { opacity: 0.9; }
+        .btn-login:disabled { opacity: 0.7; cursor: not-allowed; }
+        
+        #login-error { color: var(--color-peligro); background: rgba(239, 68, 68, 0.1); padding: 10px; border-radius: 4px; font-size: 13px; margin-top: 15px; display: none; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+    <div class="login-wrapper">
+        <img src="/assets/logo.png" alt="Cupissa Logo">
+        <h2>Acceso Restringido</h2>
+        <p>Panel de Administración y ERP</p>
+        
+        <form id="form-login">
+            <div class="form-group">
+                <label>Correo Electrónico Corporativo</label>
+                <input type="email" id="login-email" required placeholder="admin@cupissa.com">
+            </div>
+            <div class="form-group">
+                <label>Contraseña</label>
+                <input type="password" id="login-password" required placeholder="••••••••">
+            </div>
+            <button type="submit" class="btn-login" id="btn-submit">Iniciar Sesión</button>
+            <div id="login-error"></div>
+        </form>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/login.js"></script>
+</body>
+</html>

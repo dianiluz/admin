@@ -10,11 +10,10 @@
     <link rel="manifest" href="/manifest.json">
     
     <script>
-        (function() {
-            if (localStorage.getItem('cupissa_admin_session')) {
-                window.location.replace('index.html');
-            }
-        })();
+        // Redirección rápida si YA está logueado
+        if (localStorage.getItem('cupissa_admin_session')) {
+            window.location.replace('index.html');
+        }
     </script>
 
     <style>
@@ -48,8 +47,8 @@
         .btn-login { width: 100%; padding: 12px; background: var(--color-primario); color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 16px; margin-top: 10px; transition: opacity 0.3s; }
         .btn-login:hover { opacity: 0.9; }
         .btn-login:disabled { opacity: 0.7; cursor: not-allowed; }
-    
-        .btn-descarga { width: 100%; padding: 12px; background: var(--color-fondo); color: var(--color-texto); border: 1px solid var(--color-borde); border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; margin-top: 15px; transition: all 0.3s; display: block; } /* display: block forzado */
+        
+        .btn-descarga { width: 100%; padding: 12px; background: var(--color-fondo); color: var(--color-texto); border: 1px solid var(--color-borde); border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; margin-top: 15px; transition: all 0.3s; display: block; } 
         .btn-descarga:hover { border-color: var(--color-primario); color: var(--color-primario); }
 
         #login-error { color: var(--color-peligro); background: rgba(239, 68, 68, 0.1); padding: 10px; border-radius: 4px; font-size: 13px; margin-top: 15px; display: none; font-weight: 600; }
@@ -91,7 +90,6 @@
         let deferredPromptLogin = null;
         const btnInstalarLogin = document.getElementById('btn-instalar-login');
 
-        // Solo los navegadores compatibles (Android/Chrome/Edge) disparan esto
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPromptLogin = e;
@@ -100,15 +98,13 @@
         if (btnInstalarLogin) {
             btnInstalarLogin.addEventListener('click', async () => {
                 if (deferredPromptLogin) {
-                    // Es Android/PC: Mostrar el cuadro de diálogo nativo
                     deferredPromptLogin.prompt();
                     const { outcome } = await deferredPromptLogin.userChoice;
                     if (outcome === 'accepted') {
                         deferredPromptLogin = null;
                     }
                 } else {
-                    // Es iPhone o ya la instaló: Le explicamos cómo hacerlo manualmente
-                    alert("📱 Para instalar en iPhone o iPad:\n\n1. Toca el ícono de 'Compartir' (el cuadrado con la flechita hacia arriba en tu navegador).\n2. Selecciona 'Agregar a la pantalla de inicio'.\n\n(Si usas Android, verifica si la app ya está instalada en tu dispositivo).");
+                    alert("📱 Para instalar en celular:\n\n1. Toca el ícono de 'Compartir' o menú de opciones de tu navegador.\n2. Selecciona 'Agregar a la pantalla de inicio' o 'Instalar aplicación'.");
                 }
             });
         }

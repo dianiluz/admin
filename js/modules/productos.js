@@ -1,5 +1,5 @@
 window.productosGlobales = [];
-window.variacionesGlobales = []; // Aseguramos que exista
+window.variacionesGlobales = [];
 
 window.renderProductos = function() {
     const dynamicContent = document.getElementById('dynamic-content');
@@ -12,7 +12,7 @@ window.renderProductos = function() {
             <div style="margin-bottom: 15px;">
                 <input type="text" id="buscador-productos" class="buscador-panel" placeholder="Buscar por nombre, ref o categoría...">
             </div>
-            <div style="overflow-x: auto;">
+            <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -62,7 +62,7 @@ async function cargarProductos() {
         
         if (data.success && data.productos) {
             window.productosGlobales = data.productos;
-            if (data.variaciones) window.variacionesGlobales = data.variaciones; // Guardamos las globales
+            if (data.variaciones) window.variacionesGlobales = data.variaciones; // Guarda variaciones de products.gs
             renderizarTablaProductos(window.productosGlobales);
         } else {
             tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--color-peligro);">Error: ${data.error || 'No se pudieron cargar los productos.'}</td></tr>`;
@@ -207,17 +207,23 @@ window.abrirModalProducto = function(productoEdicion = null) {
     // 1. CARGAR SELECT DINÁMICO DE PRECONFIGURACIONES
     let opcionesPreconfig = '<option value="">Cargar preconfiguración...</option>';
     const gruposPreconfig = {};
-    if (window.variacionesGlobales) {
+    
+    if (window.variacionesGlobales && window.variacionesGlobales.length > 0) {
         window.variacionesGlobales.forEach(vg => {
-            const llave = vg.columna; 
-            if (!gruposPreconfig[llave]) gruposPreconfig[llave] = [];
-            gruposPreconfig[llave].push(vg);
+            const colName = vg.columna || vg.Columna || vg['COLUMNA'];
+            if (colName) {
+                if (!gruposPreconfig[colName]) gruposPreconfig[colName] = [];
+                gruposPreconfig[colName].push(vg);
+            }
         });
+        
         for (const llave in gruposPreconfig) {
             const partes = llave.split('|');
             const nombreAmigable = partes[partes.length - 1] || llave;
             opcionesPreconfig += `<option value="${llave}">${llave} (${nombreAmigable})</option>`;
         }
+    } else {
+        opcionesPreconfig += '<option value="" disabled>⚠️ No se detectaron variaciones en BD</option>';
     }
 
     // 2. EXTRAER VALORES MANUALES PARA EL AUTOCOMPLETADO
@@ -261,7 +267,7 @@ window.abrirModalProducto = function(productoEdicion = null) {
                         <input type="text" id="prod-nombre" required value="${vals.nombre}">
                     </div>
 
-                    <div class="form-group" style="grid-column: 1 / -1;"><label>Descripción SEO / Alt Text (Google & Pinterest)</label>
+                    <div class="form-group" style="grid-column: 1 / -1;"><label>Descripción SEO / Alt Text</label>
                         <input type="text" id="prod-seo-alt" value="${vals.seo_alt}" placeholder="Ej: Conjunto personalizado de temática para niñas">
                     </div>
 
@@ -295,19 +301,24 @@ window.abrirModalProducto = function(productoEdicion = null) {
                     <div class="form-group"><label>¿Para quien?</label>
                         <input type="text" id="prod-para-quien" value="${vals.para_quien}">
                     </div>
-                    <div class="form-group"><label>*Modalidad</label>
-                        <select id="prod-modalidad">
-                            <option value="" ${vals.modalidad === '' ? 'selected' : ''}>(Sin especificar)</option>
-                            <option value="Venta" ${vals.modalidad === 'Venta' ? 'selected' : ''}>Venta</option>
-                            <option value="Compra" ${vals.modalidad === 'Compra' ? 'selected' : ''}>Compra</option>
-                            <option value="Alquiler" ${vals.modalidad === 'Alquiler' ? 'selected' : ''}>Alquiler</option>
-                        </select>
+                    
+                    <div class="form-group"><label>Modalidad</label>
+                        <div style="display: flex; gap: 15px; padding: 10px; border: 1px solid var(--color-borde); border-radius: 4px; font-size: 14px;">
+                            <label style="font-weight: 400; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                <input type="checkbox" class="chk-modalidad" value="Compra" ${vals.modalidad.includes('Compra') ? 'checked' : ''}> Compra
+                            </label>
+                            <label style="font-weight: 400; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                <input type="checkbox" class="chk-modalidad" value="Alquiler" ${vals.modalidad.includes('Alquiler') ? 'checked' : ''}> Alquiler
+                            </label>
+                        </div>
+                        <small style="color: var(--color-texto-suave); font-size: 11px; margin-top: 4px;">* Si no seleccionas, quedará "Sin especificar"</small>
                     </div>
+
                     <div class="form-group"><label>*Precio Base ($)</label>
                         <input type="number" id="prod-precio" required min="0" value="${vals.precio}">
                     </div>
 
-                    <div class="form-group drop-zone" id="drop-zone">
+                    <div class="form-group drop-zone" id="drop-zone" style="grid-column: 1 / -1;">
                         <p style="color: var(--color-texto-suave);">Arrastra imágenes o haz clic para subir y recortar</p>
                         <input type="file" id="file-input" multiple accept="image/*" style="display:none;">
                         <div class="preview-container" id="preview-container">
@@ -315,21 +326,23 @@ window.abrirModalProducto = function(productoEdicion = null) {
                         </div>
                     </div>
 
-                    <div class="variaciones-section">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                            <h3>Variaciones e Incrementos</h3>
-                            <select id="select-preconfig" style="padding: 5px; border-radius: 4px; border: 1px solid var(--color-borde);">
+                    <div class="variaciones-section" style="grid-column: 1 / -1;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
+                            <h3 style="margin: 0;">Variaciones e Incrementos</h3>
+                            <select id="select-preconfig" style="padding: 5px; border-radius: 4px; border: 1px solid var(--color-borde); max-width: 100%; flex: 1; min-width: 200px;">
                                 ${opcionesPreconfig}
                             </select>
                         </div>
                         <button type="button" class="btn-primario" id="btn-add-variacion" style="margin-bottom: 10px;">+ Variación Manual</button>
-                        <table class="tabla-variaciones" id="tabla-variaciones">
-                            <thead><tr><th>Columna</th><th>Valor</th><th>Incremento ($)</th><th>Acción</th></tr></thead>
-                            <tbody id="tbody-variaciones"></tbody>
-                        </table>
+                        <div style="overflow-x: auto;">
+                            <table class="tabla-variaciones" id="tabla-variaciones">
+                                <thead><tr><th>Columna</th><th>Valor</th><th>Incremento ($)</th><th>Acción</th></tr></thead>
+                                <tbody id="tbody-variaciones"></tbody>
+                            </table>
+                        </div>
                     </div>
 
-                    <div class="modal-actions">
+                    <div class="modal-actions" style="grid-column: 1 / -1;">
                         <button type="button" class="btn-secundario" id="btn-cerrar-modal">Cancelar</button>
                         <button type="submit" class="btn-primario">Guardar Producto</button>
                     </div>
@@ -372,12 +385,10 @@ function inicializarLogicaModal(productoEdicion) {
 
     const tbodyVariaciones = document.getElementById('tbody-variaciones');
     
-    // MODIFICADO: Agrega el atributo "tipo" para distinguir entre manual y preconfigurada
     const agregarFilaVariacion = (columna = '', valor = '', incremento = '0', tipo = 'manual') => {
         const tr = document.createElement('tr');
         tr.dataset.tipo = tipo; 
         
-        // Estilos para diferenciar visualmente las preconfiguradas de las manuales
         const readonlyAttr = tipo === 'preconfigurada' ? 'readonly' : '';
         const bgStyle = tipo === 'preconfigurada' ? 'background: #f0fdf4; color: #166534; font-size:12px; font-weight:600;' : '';
 
@@ -396,7 +407,6 @@ function inicializarLogicaModal(productoEdicion) {
 
     document.getElementById('btn-add-variacion').addEventListener('click', () => agregarFilaVariacion('', '', '0', 'manual'));
 
-    // CARGAR VARIACIONES EXISTENTES AL EDITAR
     if (productoEdicion && productoEdicion.variaciones) {
         try {
             const vJson = typeof productoEdicion.variaciones === 'string' ? JSON.parse(productoEdicion.variaciones) : productoEdicion.variaciones;
@@ -406,15 +416,20 @@ function inicializarLogicaModal(productoEdicion) {
         } catch(e) {}
     }
 
-    // MODIFICADO: Agrega las filas preconfiguradas buscando en las globales
     document.getElementById('select-preconfig').addEventListener('change', (e) => {
         const llaveSeleccionada = e.target.value;
         if (!llaveSeleccionada) return;
 
         if (window.variacionesGlobales) {
-            const variacionesGrupo = window.variacionesGlobales.filter(vg => vg.columna === llaveSeleccionada);
+            const variacionesGrupo = window.variacionesGlobales.filter(vg => {
+                const colName = vg.columna || vg.Columna || vg['COLUMNA'];
+                return colName === llaveSeleccionada;
+            });
+            
             variacionesGrupo.forEach(vg => {
-                agregarFilaVariacion(vg.columna, vg.valor, vg.incremento, 'preconfigurada');
+                const val = vg.valor || vg.Valor || vg['VALOR'] || '';
+                const inc = vg.incremento || vg.Incremento || vg['INCREMENTO'] || 0;
+                agregarFilaVariacion(llaveSeleccionada, val, inc, 'preconfigurada');
             });
         }
         e.target.value = '';
@@ -500,9 +515,12 @@ function inicializarLogicaModal(productoEdicion) {
         btnSubmit.textContent = "Guardando...";
         btnSubmit.disabled = true;
 
+        // Leer los checkboxes de Modalidad
+        const cboxModalidad = document.querySelectorAll('.chk-modalidad:checked');
+        const modalidadSeleccionada = Array.from(cboxModalidad).map(cb => cb.value).join(', ');
+
         const variaciones = [];
         document.querySelectorAll('#tbody-variaciones tr').forEach(tr => {
-            // MODIFICADO: Solo capturamos las marcadas como MANUALES para no duplicar en el backend
             if (tr.dataset.tipo === 'manual') {
                 variaciones.push({
                     columna: tr.querySelector('.var-columna').value,
@@ -525,7 +543,7 @@ function inicializarLogicaModal(productoEdicion) {
             temporada: document.getElementById('prod-temporada').value,
             x_temp: document.getElementById('prod-x-temp').value,
             para_quien: document.getElementById('prod-para-quien').value,
-            modalidad: document.getElementById('prod-modalidad').value,
+            modalidad: modalidadSeleccionada,
             precio_base: document.getElementById('prod-precio').value,
             variaciones: variaciones
         };

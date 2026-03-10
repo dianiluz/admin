@@ -7,6 +7,7 @@
     
     <link href="https://fonts.googleapis.com/css2?family=Bree+Serif&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/variables.css">
+    <link rel="manifest" href="/manifest.json">
     
     <script>
         (function() {
@@ -48,6 +49,9 @@
         .btn-login:hover { opacity: 0.9; }
         .btn-login:disabled { opacity: 0.7; cursor: not-allowed; }
         
+        .btn-descarga { width: 100%; padding: 12px; background: var(--color-fondo); color: var(--color-texto); border: 1px solid var(--color-borde); border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px; margin-top: 15px; transition: all 0.3s; display: none; }
+        .btn-descarga:hover { border-color: var(--color-primario); color: var(--color-primario); }
+
         #login-error { color: var(--color-peligro); background: rgba(239, 68, 68, 0.1); padding: 10px; border-radius: 4px; font-size: 13px; margin-top: 15px; display: none; font-weight: 600; }
     </style>
 </head>
@@ -70,9 +74,45 @@
             <button type="submit" class="btn-login" id="btn-submit">Iniciar Sesión</button>
             <div id="login-error"></div>
         </form>
+
+        <button type="button" id="btn-instalar-login" class="btn-descarga">⬇️ Descargar App Panel Admin</button>
     </div>
 
     <script src="js/config.js"></script>
     <script src="js/login.js"></script>
+
+    <script>
+        // Registrar Service Worker desde el Login
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(err => console.warn('SW no cargado', err));
+            });
+        }
+
+        // Lógica del botón de Descarga
+        let deferredPromptLogin;
+        const btnInstalarLogin = document.getElementById('btn-instalar-login');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Prevenir que aparezca el mini-aviso nativo y usar nuestro botón
+            e.preventDefault();
+            deferredPromptLogin = e;
+            // Mostrar el botón
+            if (btnInstalarLogin) btnInstalarLogin.style.display = 'block';
+        });
+
+        if (btnInstalarLogin) {
+            btnInstalarLogin.addEventListener('click', async () => {
+                if (deferredPromptLogin) {
+                    deferredPromptLogin.prompt();
+                    const { outcome } = await deferredPromptLogin.userChoice;
+                    if (outcome === 'accepted') {
+                        btnInstalarLogin.style.display = 'none'; // Ocultar si aceptó
+                    }
+                    deferredPromptLogin = null;
+                }
+            });
+        }
+    </script>
 </body>
 </html>

@@ -1,6 +1,70 @@
 window.pedidosGlobales = [];
 window.usuariosGlobales = [];
-window.variacionesGlobales = []; // Nuevo: para la hoja de variaciones
+
+// --- EVALUADOR DE VARIACIONES BLINDADO ---
+// Normaliza las columnas para que coincidan sin importar espacios, símbolos o mayúsculas
+// --- EVALUADOR DE VARIACIONES ULTRA-FLEXIBLE ---
+window.productoCumpleCondicion = function(prod, columnasStr, valoresStr) {
+    if (!columnasStr || !valoresStr) return true;
+
+    // Limpiamos las reglas (quitamos símbolos y pasamos a minúsculas)
+    const colsRegla = String(columnasStr).split('|').map(s => s.trim().toLowerCase().replace(/[^a-z0-9]/g, ''));
+    const valsRegla = String(valoresStr).split('|').map(s => s.trim().toUpperCase());
+
+    // Limpiamos las llaves del producto
+    let prodLimpio = {};
+    for (let key in prod) {
+        let keyLimpia = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+        prodLimpio[keyLimpia] = String(prod[key]).toUpperCase().trim();
+    }
+
+    let cumple = true;
+    for (let i = 0; i < colsRegla.length; i++) {
+        const colBusqueda = colsRegla[i];
+        const valorBuscado = valsRegla[i];
+        
+        let llaveEncontrada = null;
+        for(let keyProd in prodLimpio) {
+            // Si coinciden parcial o totalmente
+            if(keyProd.includes(colBusqueda) || colBusqueda.includes(keyProd)) {
+                llaveEncontrada = keyProd;
+                break;
+            }
+        }
+        
+        if (llaveEncontrada) {
+            const valorReal = prodLimpio[llaveEncontrada];
+            // Si la celda del producto está vacía, o dice "TODOS", "TODAS", asumimos que aplica
+            if (valorReal === "" || valorReal.includes("TOD")) {
+                continue; 
+            }
+            // Validamos que el valor coincida
+            if (valorReal !== valorBuscado && !valorReal.includes(valorBuscado) && !valorBuscado.includes(valorReal)) {
+                cumple = false;
+                break;
+            }
+        }
+        // Si no existe la columna en el producto (ej. "tallas"), lo dejamos pasar 
+        // porque es el atributo que la variación le va a agregar.
+    }
+    return cumple;
+};
+
+// Función para abrir modal de creación de producto sin salir del ERP
+window.crearProductoDesdeERP = function(nombreInicial) {
+    if (typeof window.abrirModalProducto === 'function') {
+        window.abrirModalProducto(); 
+        setTimeout(() => {
+            const inputNombre = document.getElementById('prod-nombre');
+            if (inputNombre) inputNombre.value = nombreInicial;
+            const modalProd = document.getElementById('modal-producto');
+            if (modalProd) modalProd.style.zIndex = '2000'; // Asegura que quede encima del modal ERP
+            document.querySelectorAll('.res-prod-flotante').forEach(el => el.style.display = 'none');
+        }, 100);
+    } else {
+        window.mostrarToast("El módulo de productos no está cargado.", "error");
+    }
+};
 
 window.renderPedidos = function() {
     const dynamicContent = document.getElementById('dynamic-content');
@@ -49,7 +113,6 @@ window.renderPedidos = function() {
     document.getElementById('btn-recargar-pedidos').addEventListener('click', () => {
         cargarPedidos();
         cargarUsuarios();
-        cargarVariaciones();
     });
     
     document.getElementById('btn-crear-pedido').addEventListener('click', window.abrirModalCrearPedido);
@@ -72,22 +135,24 @@ window.renderPedidos = function() {
     document.getElementById('buscador-pedidos').addEventListener('input', filtrarPedidos);
     document.getElementById('filtro-estado-pedido').addEventListener('change', filtrarPedidos);
 
-    // Cargas iniciales
     cargarPedidos();
     cargarUsuarios();
-    cargarVariaciones();
     
     if (!window.productosGlobales || window.productosGlobales.length === 0) {
         fetch(CUPISSA_CONFIG.API_URL, {
             method: 'POST', 
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({ action: 'obtenerCatalogoBase' })
-        }).then(r => r.json()).then(d => { if(d.success) window.productosGlobales = d.productos; }).catch(()=>{});
+        }).then(r => r.json()).then(d => { 
+            if(d.success) {
+                window.productosGlobales = d.productos; 
+                if(d.variaciones) window.variacionesGlobales = d.variaciones;
+            }
+        }).catch(()=>{});
     }
 };
 
-// --- CORRECCIÓN 1: BUSCADOR DE CLIENTES (Faltaban los headers para evitar bloqueo CORS) ---
-async function cargarUsuarios() {
+window.cargarUsuarios = async function() {
     try {
         const response = await fetch(CUPISSA_CONFIG.API_URL, {
             method: 'POST', 
@@ -95,22 +160,11 @@ async function cargarUsuarios() {
             body: JSON.stringify({ action: 'obtenerTodosUsuarios' })
         });
         const data = await response.json();
-        if (data.success && data.usuarios) window.usuariosGlobales = data.usuarios;
-    } catch(e) { console.warn("Error al cargar usuarios"); }
-}
-
-// Carga de la hoja de variaciones
-async function cargarVariaciones() {
-    try {
-        const response = await fetch(CUPISSA_CONFIG.API_URL, {
-            method: 'POST', 
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({ action: 'obtenerVariaciones' }) // Asegúrate de que este action exista en tu Apps Script
-        });
-        const data = await response.json();
-        if (data.success && data.variaciones) window.variacionesGlobales = data.variaciones;
-    } catch(e) { console.warn("Error al cargar variaciones"); }
-}
+        if (data.success && data.usuarios) {
+            window.usuariosGlobales = data.usuarios;
+        }
+    } catch(e) { console.warn("Fallo silencioso al pre-cargar usuarios", e); }
+};
 
 async function cargarPedidos() {
     const tbody = document.getElementById('tabla-pedidos-body');
@@ -184,7 +238,6 @@ function renderizarTablaPedidos(pedidos) {
     });
 }
 
-// --- GESTIÓN DE PEDIDO EXISTENTE (Se mantiene igual que la versión anterior) ---
 window.abrirModalGestionPedido = function(idPedido) {
     const pedido = window.pedidosGlobales.find(p => p.IDpedido === idPedido);
     if (!pedido) return;
@@ -287,10 +340,24 @@ window.abrirModalGestionPedido = function(idPedido) {
     document.getElementById('btn-eliminar-pedido').addEventListener('click', async () => {
         if (confirm(`¿Estás 100% segura de eliminar el pedido ${pedido.IDpedido}? Esta acción no se puede deshacer.`)) {
             try {
-                const response = await fetch(CUPISSA_CONFIG.API_URL, { method: 'POST', body: JSON.stringify({ action: 'eliminarPedido', id_pedido: pedido.IDpedido }) });
+                // Se agregaron los headers obligatorios para Apps Script
+                const response = await fetch(CUPISSA_CONFIG.API_URL, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'eliminarPedido', id_pedido: pedido.IDpedido }) 
+                });
                 const data = await response.json();
-                if (data.success) { window.mostrarToast("Pedido eliminado correctamente.", "exito"); cerrar(); cargarPedidos(); }
-            } catch (error) { window.mostrarToast("Error de conexión al eliminar.", "error"); }
+                
+                if (data.success) { 
+                    window.mostrarToast("Pedido eliminado correctamente.", "exito"); 
+                    cerrar(); 
+                    cargarPedidos(); 
+                } else {
+                    window.mostrarToast("Error: " + data.error, "error");
+                }
+            } catch (error) { 
+                window.mostrarToast("Error de conexión al eliminar.", "error"); 
+            }
         }
     });
 
@@ -327,13 +394,19 @@ window.abrirModalGestionPedido = function(idPedido) {
             const response = await fetch(CUPISSA_CONFIG.API_URL, { method: 'POST', body: JSON.stringify(payload) });
             const data = await response.json();
             if (data.success) { window.mostrarToast("Pedido actualizado.", "exito"); cerrar(); cargarPedidos(); }
-            else { btnSubmit.disabled = false; }
-        } catch (error) { btnSubmit.disabled = false; }
+            else { window.mostrarToast("Error: " + data.error, "error"); btnSubmit.textContent = "Guardar Cambios"; btnSubmit.disabled = false; }
+        } catch (error) { window.mostrarToast("Error de conexión.", "error"); btnSubmit.disabled = false; }
     });
 };
 
 // --- CREACIÓN DE PEDIDO ERP (NUEVO) ---
-window.abrirModalCrearPedido = function() {
+window.abrirModalCrearPedido = async function() {
+    
+    if (!window.usuariosGlobales || window.usuariosGlobales.length === 0) {
+        window.mostrarToast("Sincronizando base de clientes...", "exito");
+        await window.cargarUsuarios();
+    }
+
     const modalHtml = `
         <div class="modal-overlay" id="modal-crear-pedido">
             <div class="modal-content" style="max-width: 1100px;">
@@ -341,18 +414,19 @@ window.abrirModalCrearPedido = function() {
                 <h2 style="margin-bottom: 20px; color: var(--color-primario);">Crear Nuevo Pedido ERP</h2>
                 
                 <form id="form-crear-pedido-erp">
+                    
                     <div class="detalle-seccion" style="margin-bottom: 20px; background:var(--color-fondo); padding:15px; border-radius:8px;">
+                        <div style="margin-bottom: 15px; position:relative;">
+                            <label style="font-weight: bold; color: var(--color-primario); display:block; margin-bottom:5px;">Buscador de Clientes (Autocompletar)</label>
+                            <input type="text" id="erp-buscador-cliente" placeholder="🔍 Escribe nombre, email o CC para buscar un cliente existente..." style="width:100%; padding:10px; border-radius:4px; border:1px solid var(--color-primario); font-size: 14px;" autocomplete="off">
+                            <div id="erp-res-clientes" class="resultados-flotantes" style="display:none; width:100%; position:absolute; top:100%; left:0; z-index:9999; background:#fff; border:1px solid #ccc; max-height:250px; overflow-y:auto; box-shadow:0 4px 6px rgba(0,0,0,0.1);"></div>
+                        </div>
+
                         <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid var(--color-borde); padding-bottom: 10px; margin-bottom: 15px;">
                             <h3>Datos del Cliente</h3>
-                            <div style="display:flex; gap:15px; align-items:center;">
-                                <div style="position:relative; width:250px;">
-                                    <input type="text" id="erp-buscador-cliente" placeholder="Buscar por email o nombre..." style="width:100%; padding:6px; border-radius:4px; border:1px solid #ccc;" autocomplete="off">
-                                    <div id="erp-res-clientes" class="resultados-flotantes" style="display:none; width:100%; position:absolute; top:100%; left:0; z-index:100; background:#fff; border:1px solid #ccc; max-height:200px; overflow-y:auto; box-shadow:0 4px 6px rgba(0,0,0,0.1);"></div>
-                                </div>
-                                <label style="font-size:12px; cursor:pointer; color:var(--color-exito); font-weight:600;">
-                                    <input type="checkbox" id="erp-guardar-cliente" checked> Guardar / Enviar Bienvenida
-                                </label>
-                            </div>
+                            <label style="font-size:12px; cursor:pointer; color:var(--color-exito); font-weight:600;">
+                                <input type="checkbox" id="erp-guardar-cliente" checked> Guardar / Enviar Bienvenida
+                            </label>
                         </div>
                         <div class="form-grid">
                             <div class="form-group"><label>CC / NIT</label><input type="text" id="erp-cc"></div>
@@ -380,10 +454,10 @@ window.abrirModalCrearPedido = function() {
                         <table class="tabla-variaciones" style="width:100%;">
                             <thead>
                                 <tr>
-                                    <th style="width:30%">Ref / Producto (Minatura)</th>
-                                    <th style="width:25%">Variación (Buscar en Hoja)</th>
+                                    <th style="width:30%">Ref / Producto (Miniatura)</th>
+                                    <th style="width:25%">Variaciones (Desplegable)</th>
                                     <th style="width:10%">Cant.</th>
-                                    <th style="width:15%">Precio Final ($)</th>
+                                    <th style="width:15%">Precio Base ($)</th>
                                     <th style="width:10%; text-align:center;">Guardar Catálogo</th>
                                     <th style="width:5%">Acción</th>
                                 </tr>
@@ -393,7 +467,6 @@ window.abrirModalCrearPedido = function() {
                     </div>
 
                     <div class="detalle-seccion" style="margin-bottom: 20px; display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                        
                         <div style="background: var(--color-fondo); padding: 15px; border-radius: 8px;">
                             <h4 style="margin-bottom: 10px;">Logística y Método de Pago</h4>
                             <div class="form-group" style="margin-bottom:10px;" id="erp-transportadora-container">
@@ -462,44 +535,57 @@ window.abrirModalCrearPedido = function() {
     document.getElementById('btn-x-crear-pedido').addEventListener('click', cerrar);
     document.getElementById('btn-cerrar-erp').addEventListener('click', cerrar);
 
-    // AUTOCOMPLETADO DE CLIENTES
-    const buscadorCliente = document.getElementById('erp-buscador-cliente');
-    const resClientes = document.getElementById('erp-res-clientes');
-    buscadorCliente.addEventListener('input', (e) => {
-        const val = e.target.value.toLowerCase();
-        resClientes.innerHTML = '';
-        if(val.length < 3) { resClientes.style.display = 'none'; return; }
-        
-        const matches = (window.usuariosGlobales || []).filter(u => 
-            (u.email && u.email.toLowerCase().includes(val)) || 
-            (u.nombre && u.nombre.toLowerCase().includes(val))
-        ).slice(0, 5);
+   // Reemplaza la sección del buscador de clientes dentro de abrirModalCrearPedido con esto:
+// BUSCADOR DE CLIENTES REAL (BÚSQUEDA AL BACKEND)
+const buscadorCliente = document.getElementById('erp-buscador-cliente');
+const resClientes = document.getElementById('erp-res-clientes');
 
-        if(matches.length > 0) {
-            matches.forEach(m => {
+buscadorCliente.addEventListener('input', async (e) => {
+    const val = e.target.value.toLowerCase().trim();
+    resClientes.innerHTML = '';
+    if (val.length < 3) { resClientes.style.display = 'none'; return; }
+
+    try {
+        // Llamada correcta al Backend según tu MAIN.GS
+        const response = await fetch(CUPISSA_CONFIG.API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'obtenerClientesGeneral', term: val })
+        });
+        const data = await response.json();
+
+        if (data.success && data.clientes.length > 0) {
+            data.clientes.forEach(m => {
+                // Mapeo según las columnas de tu ADMIN.GS (cc está en el índice 4, tel en el 6)
+                const cc = m.cc || m.nit || m['CC / NIT'] || '';
+                const nombre = m.nombre || m['Nombre Completo'] || 'Sin Nombre';
+                const email = m.email || m['Email'] || '';
+                const tel = m.telefono || m.tel || m['Teléfono (WhatsApp)'] || '';
+
                 const div = document.createElement('div');
-                div.className = 'item-resultado'; div.style.padding = '8px'; div.style.cursor = 'pointer'; div.style.borderBottom = '1px solid #eee';
-                div.innerHTML = `<strong>${m.nombre}</strong><br><small>${m.email}</small>`;
+                div.className = 'item-resultado';
+                div.style.padding = '10px'; div.style.cursor = 'pointer'; div.style.borderBottom = '1px solid #eee';
+                div.innerHTML = `<strong style="color:var(--color-primario);">${nombre}</strong><br><small>${email} | CC: ${cc}</small>`;
+                
                 div.onclick = () => {
-                    document.getElementById('erp-cc').value = m.cc || '';
-                    document.getElementById('erp-nombre').value = m.nombre || '';
-                    document.getElementById('erp-email').value = m.email || '';
-                    document.getElementById('erp-telefono').value = m.telefono || '';
+                    document.getElementById('erp-cc').value = cc;
+                    document.getElementById('erp-nombre').value = nombre;
+                    document.getElementById('erp-email').value = email;
+                    document.getElementById('erp-telefono').value = tel;
                     document.getElementById('erp-ciudad').value = m.ciudad || '';
-                    document.getElementById('erp-barrio').value = m.barrio || '';
-                    document.getElementById('erp-direccion').value = m.direccion || '';
-                    document.getElementById('erp-guardar-cliente').checked = false; // Ya existe, no enviar correo de nuevo ni guardarlo como nuevo
+                    document.getElementById('erp-departamento').value = m.depto || '';
+                    document.getElementById('erp-direccion').value = m.dir || '';
                     resClientes.style.display = 'none';
-                    buscadorCliente.value = '';
-                    calcularEnvioLocal();
+                    buscadorCliente.value = nombre;
                 };
                 resClientes.appendChild(div);
             });
             resClientes.style.display = 'block';
-        } else { resClientes.style.display = 'none'; }
-    });
+        }
+    } catch (e) { console.error("Error buscando clientes", e); }
+});
 
-    // CORRECCIÓN 2: AUTOCOMPLETADO DE BARRIOS LOCALES
+    // BUSCADOR DE BARRIOS LOCALES
     const inputBarrio = document.getElementById('erp-barrio');
     const resBarrios = document.getElementById('erp-res-barrios');
     inputBarrio.addEventListener('input', (e) => {
@@ -515,7 +601,7 @@ window.abrirModalCrearPedido = function() {
                 div.innerHTML = `${m.n} <small style="color:var(--color-texto-suave);">(${m.m})</small>`;
                 div.onclick = () => {
                     inputBarrio.value = m.n;
-                    document.getElementById('erp-ciudad').value = m.m; // Autocompleta la ciudad también
+                    document.getElementById('erp-ciudad').value = m.m;
                     resBarrios.style.display = 'none';
                     calcularEnvioLocal();
                 };
@@ -524,13 +610,13 @@ window.abrirModalCrearPedido = function() {
             resBarrios.style.display = 'block';
         } else { resBarrios.style.display = 'none'; }
     });
-    // Ocultar resultados al hacer click fuera
+
     document.addEventListener('click', (e) => {
         if(!inputBarrio.contains(e.target)) resBarrios.style.display = 'none';
         if(!buscadorCliente.contains(e.target)) resClientes.style.display = 'none';
     });
 
-    // CÁLCULO DE ENVÍO LOCAL, DEPARTAMENTO Y VALIDACIÓN DE CC
+    // CÁLCULO DE ENVÍO LOCAL Y DEPARTAMENTO
     const calcularEnvioLocal = () => {
         const ciudad = document.getElementById('erp-ciudad').value.trim().toUpperCase();
         const barrio = document.getElementById('erp-barrio').value.trim().toUpperCase();
@@ -544,10 +630,9 @@ window.abrirModalCrearPedido = function() {
         }
         document.getElementById('erp-departamento').value = deptEncontrado;
 
-        // CORRECCIÓN 3 Y 5: Lógica de CC Obligatoria y Transportadora
         if (locales.includes(ciudad)) {
             contTransp.style.display = 'none';
-            ccInput.required = false; // Local = No obligatorio
+            ccInput.required = false; 
             if ((ciudad === "BARRANQUILLA" || ciudad === "SOLEDAD") && barrio !== "") {
                 const b = (window.BARRIOS_METRO || []).find(x => x.n.toUpperCase() === barrio && x.m === ciudad);
                 document.getElementById('erp-envio').value = b ? b.p : 15000;
@@ -556,7 +641,7 @@ window.abrirModalCrearPedido = function() {
             }
         } else if (ciudad !== "") {
             contTransp.style.display = 'block';
-            ccInput.required = true; // Nacional = Obligatorio para la transportadora
+            ccInput.required = true; 
         }
         recalcularTotales();
     };
@@ -569,8 +654,10 @@ window.abrirModalCrearPedido = function() {
         let subtotalProd = 0;
         tbodyProd.querySelectorAll('tr').forEach(tr => {
             const cant = Number(tr.querySelector('.prod-cant').value) || 0;
-            const precio = Number(tr.querySelector('.prod-precio').value) || 0;
-            subtotalProd += (cant * precio);
+            const precioBase = Number(tr.querySelector('.prod-precio').value) || 0;
+            const variacionInc = Number(tr.querySelector('.prod-variacion-select').value) || 0;
+            
+            subtotalProd += (cant * (precioBase + variacionInc));
         });
 
         const envio = Number(document.getElementById('erp-envio').value) || 0;
@@ -580,7 +667,6 @@ window.abrirModalCrearPedido = function() {
         let baseParaComision = subtotalProd + envio;
         let comision = 0;
 
-        // Wompi = Cliente asume +2.65% y $700 + IVA. Addi = Cero comisión para el cliente.
         if (metodo === 'Wompi') {
             const comisionWompiBase = (baseParaComision * 0.0265) + 700;
             comision = comisionWompiBase + (comisionWompiBase * 0.19);
@@ -598,26 +684,24 @@ window.abrirModalCrearPedido = function() {
         document.getElementById('erp-lbl-saldo').textContent = `$${Math.round(saldo).toLocaleString('es-CO')}`;
     };
 
-    // CORRECCIÓN 4: AGREGAR FILA CON MINIATURAS Y BUSCADOR DE VARIACIONES
     const agregarFilaProd = () => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>
                 <div style="position:relative;">
-                    <input type="text" class="prod-buscador" placeholder="Buscar / Crear" required style="width:100%; padding:4px;">
+                    <input type="text" class="prod-buscador" placeholder="Buscar / Crear Producto" required style="width:100%; padding:4px;">
                     <div class="res-prod-flotante resultados-flotantes" style="display:none; width:150%; position:absolute; top:100%; left:0; z-index:100; background:#fff; border:1px solid #ccc; max-height:250px; overflow-y:auto; box-shadow:0 4px 6px rgba(0,0,0,0.1);"></div>
                     <input type="hidden" class="prod-ref" value="CUSTOM">
                     <input type="hidden" class="prod-nombre">
                 </div>
             </td>
             <td>
-                <div style="position:relative;">
-                    <input type="text" class="prod-variacion" placeholder="Ej. Talla / Color" style="width:100%; padding:4px;" autocomplete="off">
-                    <div class="res-var-flotante resultados-flotantes" style="display:none; width:150%; position:absolute; top:100%; left:0; z-index:100; background:#fff; border:1px solid #ccc; max-height:200px; overflow-y:auto; box-shadow:0 4px 6px rgba(0,0,0,0.1);"></div>
-                </div>
+                <select class="prod-variacion-select calc-trigger" style="width:100%; padding:4px;">
+                    <option value="0" data-name="">Sin variación (+$0)</option>
+                </select>
             </td>
             <td><input type="number" class="prod-cant calc-trigger" value="1" min="1" required style="width:100%; padding:4px;"></td>
-            <td><input type="number" class="prod-precio calc-trigger" value="0" min="0" required style="width:100%; padding:4px;" title="Se auto-sumará el valor de la variación"></td>
+            <td><input type="number" class="prod-precio calc-trigger" value="0" min="0" required style="width:100%; padding:4px;"></td>
             <td style="text-align:center;"><input type="checkbox" class="prod-guardar-cat" title="Agrega el producto al catálogo general"></td>
             <td style="text-align:center;"><button type="button" class="btn-accion btn-eliminar btn-del-prod-erp">X</button></td>
         `;
@@ -628,11 +712,8 @@ window.abrirModalCrearPedido = function() {
         const inpRef = tr.querySelector('.prod-ref');
         const inpNombre = tr.querySelector('.prod-nombre');
         const inpPrecio = tr.querySelector('.prod-precio');
-        
-        const buscadorVar = tr.querySelector('.prod-variacion');
-        const resListVar = tr.querySelector('.res-var-flotante');
+        const selectVariaciones = tr.querySelector('.prod-variacion-select');
 
-        // Autocompletado Productos (Con Miniaturas)
         buscadorProd.addEventListener('input', (e) => {
             const val = e.target.value.toLowerCase();
             resListProd.innerHTML = ''; inpNombre.value = e.target.value; 
@@ -644,14 +725,12 @@ window.abrirModalCrearPedido = function() {
 
             if(matches.length > 0) {
                 matches.forEach(m => {
-                    // Procesar la imagen (si existe) para la miniatura
                     let urlImg = (m.imagenurl || '').split('|')[0].trim() || 'https://via.placeholder.com/30x30?text=CUP';
                     if (urlImg.startsWith('assets/')) urlImg = '/' + urlImg;
 
                     const div = document.createElement('div');
                     div.style.padding = '8px'; div.style.cursor = 'pointer'; div.style.borderBottom = '1px solid #eee';
                     
-                    // Diseño con imagen en miniatura
                     div.innerHTML = `
                         <div style="display:flex; align-items:center; gap:10px;">
                             <img src="${urlImg}" style="width:35px; height:35px; object-fit:cover; border-radius:4px; border:1px solid #ccc;">
@@ -661,63 +740,93 @@ window.abrirModalCrearPedido = function() {
                             </div>
                         </div>
                     `;
+
+                   // --- INICIO DEL BLOQUE ONCLICK CORREGIDO ---
                     div.onclick = () => {
                         buscadorProd.value = `${m.ref} - ${m['*producto'] || m.nombre}`;
                         inpRef.value = m.ref;
                         inpNombre.value = m['*producto'] || m.nombre;
                         inpPrecio.value = m['*precio_base'] || 0;
-                        tr.querySelector('.prod-guardar-cat').checked = false; // Si ya existe en bd
+                        
+                        selectVariaciones.innerHTML = '<option value="0" data-name="">Sin variación (+$0)</option>';
+                        let encontroAlguna = false;
+                        
+                        // 1. Variaciones Globales (de la hoja)
+                        if (window.variacionesGlobales && Array.isArray(window.variacionesGlobales)) {
+                            window.variacionesGlobales.forEach(vg => {
+                                const refRegla = String(vg.producto || vg.ref || "").trim().toUpperCase();
+                                const refActual = String(m.ref || "").trim().toUpperCase();
+
+                                if (refRegla === "" || refRegla === refActual) {
+                                    if (window.productoCumpleCondicion(m, vg.columna, vg.valor)) {
+                                        encontroAlguna = true;
+                                        const opt = document.createElement('option');
+                                        const inc = Number(vg.incremento || 0);
+                                        
+                                        const partesValor = vg.valor ? vg.valor.split('|') : [''];
+                                        const textoMostrar = partesValor[partesValor.length - 1];
+                                        
+                                        const partesColumna = vg.columna ? vg.columna.split('|') : ['Variación'];
+                                        const textoColumna = partesColumna[partesColumna.length - 1];
+                                        
+                                        opt.value = inc;
+                                        opt.setAttribute('data-name', textoMostrar);
+                                        opt.textContent = `${textoColumna} (${textoMostrar}) (+ $${inc.toLocaleString('es-CO')})`;
+                                        selectVariaciones.appendChild(opt);
+                                    }
+                                }
+                            });
+                        } else {
+                            console.warn("CUPISSA DEBUG: No llegaron variacionesGlobales del backend.");
+                        }
+
+                        if (window.variacionesGlobales && window.variacionesGlobales.length > 0 && !encontroAlguna) {
+                            console.warn("CUPISSA DEBUG: Las variaciones cargaron, pero el producto no cumplió la regla.");
+                        }
+
+                        // 2. Variaciones específicas del producto (JSON)
+                        if (m.variaciones) {
+                            try {
+                                const vJson = typeof m.variaciones === 'string' ? JSON.parse(m.variaciones) : m.variaciones;
+                                if (Array.isArray(vJson)) {
+                                    vJson.forEach(v => {
+                                        const opt = document.createElement('option');
+                                        const inc = Number(v.incremento || 0);
+                                        opt.value = inc;
+                                        opt.setAttribute('data-name', v.valor || v.variacion);
+                                        opt.textContent = `${v.columna || 'Específica'} (${v.valor || v.variacion}) (+ $${inc.toLocaleString('es-CO')})`;
+                                        selectVariaciones.appendChild(opt);
+                                    });
+                                }
+                            } catch(e) {}
+                        }
+
                         resListProd.style.display = 'none';
                         recalcularTotales();
                     };
+                    // --- FIN DEL BLOQUE ONCLICK CORREGIDO ---
+
                     resListProd.appendChild(div);
                 });
                 resListProd.style.display = 'block';
-            } else { resListProd.style.display = 'none'; }
+            } else { 
+                resListProd.innerHTML = `
+                    <div style="padding:15px; text-align:center;">
+                        <p style="margin: 0 0 10px 0; color:var(--color-texto-suave); font-size:12px;">El producto no existe en el catálogo.</p>
+                        <button type="button" class="btn-primario" style="width:100%; padding:8px;" onclick="window.crearProductoDesdeERP('${val}')">+ Crear "${val}"</button>
+                    </div>
+                `;
+                resListProd.style.display = 'block'; 
+            }
         });
 
-        // Autocompletado Variaciones (Busca en la hoja global de variaciones)
-        buscadorVar.addEventListener('input', (e) => {
-            const val = e.target.value.toLowerCase();
-            resListVar.innerHTML = ''; 
-            if(val.length < 1 || !window.variacionesGlobales) { resListVar.style.display = 'none'; return; }
-            
-            // Busca coincidencias en la variable global (asumiendo que tiene propiedades valor o nombre)
-            const matches = window.variacionesGlobales.filter(v => 
-                (v.valor && v.valor.toLowerCase().includes(val)) || 
-                (v.nombre && v.nombre.toLowerCase().includes(val)) ||
-                (v.variacion && v.variacion.toLowerCase().includes(val))
-            ).slice(0, 6);
-
-            if(matches.length > 0) {
-                matches.forEach(m => {
-                    const nombreVar = m.valor || m.nombre || m.variacion;
-                    const incremento = Number(m.incremento || m.precio || 0);
-                    const div = document.createElement('div');
-                    div.style.padding = '8px'; div.style.cursor = 'pointer'; div.style.borderBottom = '1px solid #eee';
-                    div.innerHTML = `<strong>${nombreVar}</strong> <small style="color:var(--color-exito);">+ $${incremento.toLocaleString('es-CO')}</small>`;
-                    
-                    div.onclick = () => {
-                        buscadorVar.value = nombreVar;
-                        // Suma automáticamente el incremento al precio base que tenga el input
-                        inpPrecio.value = Number(inpPrecio.value) + incremento;
-                        resListVar.style.display = 'none';
-                        recalcularTotales();
-                    };
-                    resListVar.appendChild(div);
-                });
-                resListVar.style.display = 'block';
-            } else { resListVar.style.display = 'none'; }
-        });
-
-        // Ocultar al hacer clic por fuera
         document.addEventListener('click', (e) => {
             if(!buscadorProd.contains(e.target)) resListProd.style.display = 'none';
-            if(!buscadorVar.contains(e.target)) resListVar.style.display = 'none';
         });
 
         tr.querySelector('.btn-del-prod-erp').addEventListener('click', () => { tr.remove(); recalcularTotales(); });
         tr.querySelectorAll('.calc-trigger').forEach(input => input.addEventListener('input', recalcularTotales));
+        selectVariaciones.addEventListener('change', recalcularTotales);
     };
 
     document.querySelectorAll('#modal-crear-pedido .calc-trigger').forEach(el => el.addEventListener('input', recalcularTotales));
@@ -731,14 +840,19 @@ window.abrirModalCrearPedido = function() {
         const productosPedido = [];
         tbodyProd.querySelectorAll('tr').forEach(tr => {
             let nombreProd = tr.querySelector('.prod-nombre').value;
-            const variacion = tr.querySelector('.prod-variacion').value;
-            if(variacion) nombreProd += ` (${variacion})`;
+            
+            const selectVar = tr.querySelector('.prod-variacion-select');
+            const varName = selectVar.options[selectVar.selectedIndex].getAttribute('data-name');
+            const varInc = Number(selectVar.value) || 0;
+            const precioBase = Number(tr.querySelector('.prod-precio').value) || 0;
+
+            if(varName) nombreProd += ` (${varName})`;
 
             productosPedido.push({
                 ref: tr.querySelector('.prod-ref').value,
                 nombre: nombreProd,
                 cantidad: Number(tr.querySelector('.prod-cant').value),
-                precio: Number(tr.querySelector('.prod-precio').value),
+                precio: precioBase + varInc,
                 guardar_en_catalogo: tr.querySelector('.prod-guardar-cat').checked
             });
         });
@@ -752,7 +866,7 @@ window.abrirModalCrearPedido = function() {
 
         const payload = {
             action: 'crearPedidoERP',
-            enviar_correo_bienvenida: document.getElementById('erp-guardar-cliente').checked, // 2. CORREO BIENVENIDA
+            enviar_correo_bienvenida: document.getElementById('erp-guardar-cliente').checked, 
             cliente: {
                 nuevo: document.getElementById('erp-guardar-cliente').checked,
                 cc: document.getElementById('erp-cc').value,

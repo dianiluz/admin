@@ -8,6 +8,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Bree+Serif&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/variables.css">
     
+    <script>
+        (function() {
+            if (localStorage.getItem('cupissa_admin_session')) {
+                window.location.replace('index.html');
+            }
+        })();
+    </script>
+
     <style>
         body { 
             background-color: var(--color-fondo); 
@@ -42,28 +50,6 @@
         
         #login-error { color: var(--color-peligro); background: rgba(239, 68, 68, 0.1); padding: 10px; border-radius: 4px; font-size: 13px; margin-top: 15px; display: none; font-weight: 600; }
     </style>
-
-    <style>
-        /* Oculta todo el contenido por defecto para que no haya "parpadeos" de información */
-        html { background-color: #f4f6f8; }
-        body { visibility: hidden; opacity: 0; }
-        body.autorizado { visibility: visible; opacity: 1; transition: opacity 0.3s ease; }
-    </style>
-    <script>
-        // Este script se ejecuta ANTES de que la página intente dibujarse
-        (function() {
-            var sesion = localStorage.getItem('cupissa_admin_session');
-            if (!sesion) {
-                // Si no hay llave, lo pateamos inmediatamente al login
-                window.location.replace('/login.html');
-            } else {
-                // Si hay llave, mostramos la página
-                document.addEventListener("DOMContentLoaded", function() {
-                    document.body.classList.add('autorizado');
-                });
-            }
-        })();
-    </script>
 </head>
 <body>
 

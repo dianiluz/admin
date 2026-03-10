@@ -1,26 +1,18 @@
-// DOBLE VALIDACIÓN POR SI FALLA EL HTML
+// --- 1. CANDADO DE SEGURIDAD ---
 if (!localStorage.getItem('cupissa_admin_session')) {
-    window.location.replace('/login.html');
+    window.location.replace('login.html');
 }
 
-// ... aquí sigue el resto de tu código panel-admin.js ...
+const sessionData = localStorage.getItem('cupissa_admin_session');
 let usuarioActual = { nombre: "Admin", rol: "ADMIN", email: "admin@cupissa.com" };
 
 if (sessionData) {
-    try {
-        usuarioActual = JSON.parse(sessionData);
-    } catch(e) {
-        console.error("Error leyendo sesión.");
-    }
+    try { usuarioActual = JSON.parse(sessionData); } catch(e) {}
 }
 
-/**
- * CUPISSA - Panel Admin
- * Controlador principal de navegación y PWA
- */
 document.addEventListener('DOMContentLoaded', () => {
     
-    // --- 2. ACTUALIZAR INFO DEL USUARIO EN LA BARRA SUPERIOR ---
+    // INFO DE USUARIO EN CABECERA
     const userInfoDiv = document.querySelector('.user-info');
     if (userInfoDiv) {
         userInfoDiv.innerHTML = `<strong>${usuarioActual.nombre}</strong><br><small style="font-size:10px; opacity:0.8;">${usuarioActual.rol}</small>`;
@@ -28,19 +20,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const navButtons = document.querySelectorAll('.nav-btn');
     const sectionTitle = document.getElementById('section-title');
+    
+    // ELEMENTOS MENÚ HAMBURGUESA
+    const sidebar = document.getElementById('sidebar');
+    const btnMenuMobile = document.getElementById('btn-menu-mobile');
+    const mobileOverlay = document.getElementById('mobile-overlay');
 
-    // Mapeo de Módulos
+    // LOGICA ABRIR/CERRAR MENÚ MÓVIL
+    if (btnMenuMobile && sidebar && mobileOverlay) {
+        btnMenuMobile.addEventListener('click', () => {
+            sidebar.classList.add('open');
+            mobileOverlay.classList.add('active');
+        });
+
+        mobileOverlay.addEventListener('click', () => {
+            sidebar.classList.remove('open');
+            mobileOverlay.classList.remove('active');
+        });
+    }
+
+    // FUNCION FALLBACK (Si un archivo JS no cargó, muestra esto en vez de romperse)
+    window.renderPlaceholder = function(nombre) {
+        document.getElementById('dynamic-content').innerHTML = `
+            <div class="card">
+                <h2>Módulo: ${nombre}</h2>
+                <p>Este módulo está en desarrollo o su archivo JS no cargó correctamente.</p>
+            </div>
+        `;
+    };
+
+    // MAPEO SEGURO DE MÓDULOS
     const modules = {
-        dashboard: window.renderDashboard,
-        productos: window.renderProductos,
-        pedidos: window.renderPedidos,
-        usuarios: window.renderUsuarios,
+        dashboard: typeof window.renderDashboard === 'function' ? window.renderDashboard : () => window.renderPlaceholder('Dashboard'),
+        productos: typeof window.renderProductos === 'function' ? window.renderProductos : () => window.renderPlaceholder('Productos'),
+        pedidos: typeof window.renderPedidos === 'function' ? window.renderPedidos : () => window.renderPlaceholder('Pedidos'),
+        usuarios: typeof window.renderUsuarios === 'function' ? window.renderUsuarios : () => window.renderPlaceholder('Usuarios'),
         marketing: () => window.renderPlaceholder('Marketing'),
         comisiones: () => window.renderPlaceholder('Comisiones'),
         reportes: () => window.renderPlaceholder('Reportes')
     };
 
-    // Lógica de Navegación
+    // LOGICA DE NAVEGACION
     navButtons.forEach(btn => {
         btn.addEventListener('click', (e) => {
             const button = e.currentTarget;
@@ -52,24 +72,20 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (modules[target]) {
                 modules[target]();
-            } else {
-                console.error(`Módulo ${target} no encontrado`);
+            }
+
+            // Ocultar menú automáticamente en móviles al hacer clic en una opción
+            if (window.innerWidth <= 768) {
+                sidebar.classList.remove('open');
+                mobileOverlay.classList.remove('active');
             }
         });
     });
 
-    // Inicialización por defecto
-    if (window.renderDashboard) {
-        window.renderDashboard();
-    } else {
-        // Fallback si no carga dashboard
-        window.renderPlaceholder = function(nombre) {
-            document.getElementById('dynamic-content').innerHTML = `<div class="card"><h2>${nombre}</h2><p>Módulo en desarrollo.</p></div>`;
-        }
-        window.renderPlaceholder('Dashboard');
-    }
+    // INICIAR PRIMER MÓDULO (Dashboard) AL CARGAR
+    modules['dashboard']();
 
-    // Soporte PWA (Instalación)
+    // PWA SOPORTE
     let deferredPrompt;
     const btnInstalar = document.getElementById('btn-instalar-pwa');
 
@@ -93,17 +109,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// --- FUNCIÓN GLOBAL PARA CERRAR SESIÓN ---
+// LOGOUT
 window.cerrarSesionAdmin = function() {
-    console.log("Cerrando sesión de forma segura...");
     localStorage.removeItem('cupissa_admin_session');
-    window.location.replace('login.html');
+    localStorage.clear();
+    window.location.replace('/login.html');
 };
 
-// Registrar Service Worker
+// SERVICE WORKER
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .catch(err => console.warn('Error al registrar SW', err));
+        navigator.serviceWorker.register('/sw.js').catch(err => console.warn('SW no cargado', err));
     });
 }

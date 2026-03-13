@@ -407,19 +407,51 @@ window.abrirModalGestionPedido = async function(idPedido) {
         
         try {
             const guiaLimpia = document.getElementById('gestion-guia').value.replace(/\D/g, '');
+            const nuevoEstado = parseInt(document.getElementById('gestion-estado-prod').value) || 1;
+            const estadoPagoNuevo = document.getElementById('check-pago-confirmado').checked ? "CONFIRMADO" : "PENDIENTE";
+
             const payload = {
-                estado: parseInt(document.getElementById('gestion-estado-prod').value) || 1,
+                estado: nuevoEstado,
                 guia: guiaLimpia ? parseInt(guiaLimpia) : null,
                 transportadora: document.getElementById('gestion-transportadora').value,
                 fecha_entrega_estimada: document.getElementById('fecha-est').value || null,
                 fecha_entrega_real: document.getElementById('fecha-real').value || null,
-                estado_pago: document.getElementById('check-pago-confirmado').checked ? "CONFIRMADO" : "PENDIENTE"
+                estado_pago: estadoPagoNuevo
             };
 
+            // 1. Actualizamos el pedido
             const { error } = await window.supabase.from('pedidos').update(payload).eq('idpedido', pedido.IDpedido);
             if (error) throw error;
             
             window.mostrarToast("Pedido actualizado.", "exito"); 
+
+            // 2. LÓGICA DE CUPICOINS (SUPABASE NATIVO)
+            // Se otorgan si: Pasa a estado 5 (Entregado), está pagado, y el estado anterior no era 5
+            if (nuevoEstado === 5 && parseInt(pedido.estado) !== 5 && estadoPagoNuevo === 'CONFIRMADO') {
+                if (pedido.usuario_email) {
+                    const puntosGanados = Math.floor(Number(pedido.total || 0) / 1000) * 5;
+                    
+                    if (puntosGanados > 0) {
+                        // Buscamos si el cliente ya tiene billetera
+                        const { data: billetera } = await window.supabase.from('billeteras').select('*').eq('email', pedido.usuario_email).single();
+                        
+                        const saldoActual = billetera ? (billetera.saldo || 0) : 0;
+                        const otorgadosActual = billetera ? (billetera.otorgados || 0) : 0;
+                        const redimidosActual = billetera ? (billetera.redimidos || 0) : 0;
+
+                        // Insertamos o Actualizamos la billetera
+                        await window.supabase.from('billeteras').upsert({
+                            email: pedido.usuario_email,
+                            otorgados: otorgadosActual + puntosGanados,
+                            redimidos: redimidosActual,
+                            saldo: saldoActual + puntosGanados
+                        }, { onConflict: 'email' });
+                        
+                        window.mostrarToast(`¡Se otorgaron ${puntosGanados} CupiCoins al cliente!`, "exito");
+                    }
+                }
+            }
+
             cerrar(); cargarPedidos(); 
         } catch (error) { 
             if (error.message && error.message.includes('schema cache')) {
@@ -429,8 +461,6 @@ window.abrirModalGestionPedido = async function(idPedido) {
             }
             btnSubmit.disabled = false; btnSubmit.textContent = "Guardar Cambios"; 
         }
-    });
-};
 
 // --- CREACIÓN DE PEDIDO ERP ---
 window.abrirModalCrearPedido = async function() {

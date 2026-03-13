@@ -49,8 +49,8 @@ document.addEventListener('DOMContentLoaded', () => {
         productos: () => typeof window.renderProductos === 'function' ? window.renderProductos() : renderPlaceholder('Productos'),
         pedidos: () => typeof window.renderPedidos === 'function' ? window.renderPedidos() : renderPlaceholder('Pedidos'),
         usuarios: () => typeof window.renderUsuarios === 'function' ? window.renderUsuarios() : renderPlaceholder('Usuarios'),
-        marketing: () => renderPlaceholder('Marketing'),
-        comisiones: () => renderPlaceholder('Comisiones'),
+        marketing: () => typeof window.renderMarketing === 'function' ? window.renderMarketing() : renderPlaceholder('Marketing'),
+        comisiones: () => typeof window.renderComisiones === 'function' ? window.renderComisiones() : renderPlaceholder('Comisiones'), // <-- ¡ACTUALIZADO!
         reportes: () => renderPlaceholder('Reportes')
     };
 

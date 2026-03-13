@@ -396,7 +396,7 @@ window.verEstadisticasUsuario = async function(email, rol, nombre) {
                 <p style="font-size:13px;">Este usuario es un Asesor de ventas. El cruce con ventas cerradas por referidos se habilita conectando la columna 'vendedor' en los pedidos.</p>
             </div>`;
     } else {
-        const cupiCoinsAprox = Math.floor(totalCompras * 0.05); // Ejemplo: 5% de cashback en CupiCoins
+        const cupiCoinsAprox = Math.floor(totalCompras * 0.005); // Ejemplo: 5% de cashback en CupiCoins
         textoFinanzas = `
             <div style="padding:15px; background:rgba(219, 19, 122, 0.05); border:1px solid rgba(219,19,122,0.3); border-radius:8px; margin-top:15px;">
                 <h4 style="color:var(--color-primario); margin-bottom:5px;">Fidelización Cupissa</h4>

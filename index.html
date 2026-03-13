@@ -12,7 +12,9 @@
             if (!sesion || sesion === "undefined" || sesion === "null") {
                 window.location.replace('login.html');
             } else {
-                document.getElementById('seguridad-cupissa').remove();
+                document.documentElement.style.display = 'block';
+                const styleTag = document.getElementById('seguridad-cupissa');
+                if (styleTag) styleTag.remove();
             }
         })();
     </script>
@@ -23,7 +25,7 @@
     <link rel="stylesheet" href="css/variables.css">
     <link rel="stylesheet" href="css/panel.css">
     
-    <link rel="manifest" href="/manifest.json">
+    <link rel="manifest" href="manifest.json">
 </head>
 <body>
     <div id="mobile-overlay" class="mobile-overlay"></div>
@@ -31,7 +33,7 @@
     <div class="admin-layout">
         <aside class="sidebar" id="sidebar">
             <div class="logo-container">
-                <img src="/assets/logo.png" alt="Cupissa Logo" class="logo">
+                <img src="assets/logo.png" alt="Cupissa Logo" class="logo">
             </div>
             <nav class="admin-nav" id="main-nav">
                 <button class="nav-btn active" data-target="dashboard">Dashboard</button>
@@ -44,9 +46,7 @@
             </nav>
             <div class="sidebar-footer">
                 <button id="btn-instalar-pwa" class="btn-secundario" style="display: none; width: 100%; margin-bottom: 10px;">Descargar App</button>
-                
                 <button id="btn-actualizar-app" class="btn-secundario" style="width: 100%; margin-bottom: 10px; color: var(--color-primario); border-color: var(--color-primario);">↻ Actualizar App</button>
-                
                 <button id="btn-logout" class="btn-secundario" style="width: 100%; border-color: transparent;" onclick="cerrarSesionAdmin()">Cerrar Sesión</button>
             </div>
         </aside>
@@ -57,7 +57,7 @@
                     <button id="btn-menu-mobile" class="hamburger-btn">☰</button>
                     <h1 id="section-title">Dashboard</h1>
                 </div>
-                <div class="user-info">admin@cupissa.com</div>
+                <div class="user-info" id="header-user-email">Cargando usuario...</div>
             </header>
             <div id="dynamic-content" class="module-container">
                 </div>
@@ -68,12 +68,16 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <script src="js/config.js"></script>
+     <script src="js/panel-admin.js"></script>
     <script src="js/utils.js"></script>
-    <script src="js/modules/dashboard.js"></script>
-    <script src="js/modules/productos.js"></script>
-    <script src="js/modules/pedidos.js"></script>
-    <script src="js/modules/usuarios.js"></script>
-    <script src="js/panel-admin.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/productos.js"></script>
+    <script src="js/pedidos.js"></script>
+    <script src="js/usuarios.js"></script>
+    
+   
 </body>
 </html>

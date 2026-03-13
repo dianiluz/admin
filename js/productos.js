@@ -361,13 +361,24 @@ window.abrirModalProducto = function(productoEdicion = null) {
 
             let pathImg = productoEdicion?.imagenurl || "";
             if (base64Recorte) {
-                const name = `${document.getElementById('prod-nombre').value.toLowerCase().replace(/\s+/g, '-')}-${refCalculada}.jpg`;
-                const res = await fetch(`https://api.github.com/repos/${CUPISSA_CONFIG.github.owner}/${CUPISSA_CONFIG.github.repo}/contents/assets/productos/${name}`, {
-                    method: 'PUT',
-                    headers: { 'Authorization': `token ${CUPISSA_CONFIG.github.token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: `Foto: ${name}`, content: base64Recorte, branch: CUPISSA_CONFIG.github.branch })
+                const name = `${esteModal.querySelector('#prod-nombre').value.toLowerCase().replace(/\s+/g, '-')}-${refCalculada}.jpg`;
+                
+                // Ahora le pedimos a nuestro Apps Script que suba la foto por nosotros
+                const res = await fetch(CUPISSA_CONFIG.API_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ 
+                        action: 'subirFotoGithub', 
+                        nombre_archivo: name, 
+                        base64: base64Recorte 
+                    })
                 });
-                if (res.ok) pathImg = `assets/productos/${name}`;
+                
+                const data = await res.json();
+                if (data.success) {
+                    pathImg = data.url;
+                } else {
+                    console.error("Error subiendo foto al backend:", data.error);
+                }
             }
 
             const dataToSave = {

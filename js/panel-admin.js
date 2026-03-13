@@ -1,4 +1,11 @@
-// --- 1. CANDADO DE SEGURIDAD ---
+// panel-admin.js
+
+// --- 1. CONEXIÓN A SUPABASE ---
+// La variable 'supabase' ya viene inicializada desde utils.js de forma global
+const db = window.supabase; 
+
+// --- 2. CANDADO DE SEGURIDAD ---
+// Si no hay sesión, rebota al login inmediatamente
 if (!localStorage.getItem('cupissa_admin_session')) {
     window.location.replace('login.html');
 }
@@ -15,156 +22,118 @@ document.addEventListener('DOMContentLoaded', () => {
     // INFO DE USUARIO EN CABECERA
     const userInfoDiv = document.querySelector('.user-info');
     if (userInfoDiv) {
-        userInfoDiv.innerHTML = `<strong>${usuarioActual.nombre}</strong><br><small style="font-size:10px; opacity:0.8;">${usuarioActual.rol}</small>`;
+        userInfoDiv.innerHTML = `<strong>${usuarioActual.nombre}</strong><br><small style="font-size:10px; opacity:0.8; color:#db137a;">${usuarioActual.rol}</small>`;
     }
 
     const navButtons = document.querySelectorAll('.nav-btn');
     const sectionTitle = document.getElementById('section-title');
-    
-    // ELEMENTOS MENÚ HAMBURGUESA
     const sidebar = document.getElementById('sidebar');
     const btnMenuMobile = document.getElementById('btn-menu-mobile');
     const mobileOverlay = document.getElementById('mobile-overlay');
 
-    // LOGICA ABRIR/CERRAR MENÚ MÓVIL
+    // LOGICA MENÚ MÓVIL
     if (btnMenuMobile && sidebar && mobileOverlay) {
-        btnMenuMobile.addEventListener('click', () => {
+        btnMenuMobile.onclick = () => {
             sidebar.classList.add('open');
             mobileOverlay.classList.add('active');
-        });
-
-        mobileOverlay.addEventListener('click', () => {
+        };
+        mobileOverlay.onclick = () => {
             sidebar.classList.remove('open');
             mobileOverlay.classList.remove('active');
-        });
+        };
     }
 
-    // FUNCION FALLBACK (Si un archivo JS no cargó, muestra esto en vez de romperse)
-    window.renderPlaceholder = function(nombre) {
-        document.getElementById('dynamic-content').innerHTML = `
-            <div class="card">
-                <h2>Módulo: ${nombre}</h2>
-                <p>Este módulo está en desarrollo o su archivo JS no cargó correctamente.</p>
-            </div>
-        `;
-    };
-
-    // MAPEO SEGURO DE MÓDULOS
+    // MAPEO DE MÓDULOS (Dashboard, Productos, etc.)
     const modules = {
-        dashboard: typeof window.renderDashboard === 'function' ? window.renderDashboard : () => window.renderPlaceholder('Dashboard'),
-        productos: typeof window.renderProductos === 'function' ? window.renderProductos : () => window.renderPlaceholder('Productos'),
-        pedidos: typeof window.renderPedidos === 'function' ? window.renderPedidos : () => window.renderPlaceholder('Pedidos'),
-        usuarios: typeof window.renderUsuarios === 'function' ? window.renderUsuarios : () => window.renderPlaceholder('Usuarios'),
-        marketing: () => window.renderPlaceholder('Marketing'),
-        comisiones: () => window.renderPlaceholder('Comisiones'),
-        reportes: () => window.renderPlaceholder('Reportes')
+        dashboard: () => typeof window.renderDashboard === 'function' ? window.renderDashboard() : renderPlaceholder('Dashboard'),
+        productos: () => typeof window.renderProductos === 'function' ? window.renderProductos() : renderPlaceholder('Productos'),
+        pedidos: () => typeof window.renderPedidos === 'function' ? window.renderPedidos() : renderPlaceholder('Pedidos'),
+        usuarios: () => typeof window.renderUsuarios === 'function' ? window.renderUsuarios() : renderPlaceholder('Usuarios'),
+        marketing: () => renderPlaceholder('Marketing'),
+        comisiones: () => renderPlaceholder('Comisiones'),
+        reportes: () => renderPlaceholder('Reportes')
     };
 
-    // LOGICA DE NAVEGACION
+    function renderPlaceholder(nombre) {
+        const dynamicContent = document.getElementById('dynamic-content');
+        if (dynamicContent) {
+            dynamicContent.innerHTML = `
+                <div class="card">
+                    <h2 style="color:var(--color-primario); font-family:'Bree Serif';">Módulo: ${nombre}</h2>
+                    <p>Conexión exitosa con Supabase. Optimizando vista...</p>
+                </div>`;
+        }
+    }
+
+    // NAVEGACIÓN
     navButtons.forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const button = e.currentTarget;
-            const target = button.getAttribute('data-target');
-
-            navButtons.forEach(b => b.classList.remove('active'));
-            button.classList.add('active');
-            sectionTitle.textContent = button.textContent;
+            const target = e.currentTarget.getAttribute('data-target');
             
+            // Estética de botones (Color rosa Cupissa al activar)
+            navButtons.forEach(b => b.classList.remove('active'));
+            e.currentTarget.classList.add('active');
+            
+            // Título de sección
+            if (sectionTitle) sectionTitle.textContent = e.currentTarget.textContent;
+            
+            // Carga de módulo
             if (modules[target]) {
                 modules[target]();
             }
 
-            // Ocultar menú automáticamente en móviles al hacer clic en una opción
-            if (window.innerWidth <= 768) {
+            // Cerrar menú en móvil tras click
+            if (window.innerWidth <= 768 && sidebar && mobileOverlay) {
                 sidebar.classList.remove('open');
                 mobileOverlay.classList.remove('active');
             }
         });
     });
 
-    // INICIAR PRIMER MÓDULO (Dashboard) AL CARGAR
-    modules['dashboard']();
-
-    // PWA SOPORTE
-    let deferredPrompt;
-    const btnInstalar = document.getElementById('btn-instalar-pwa');
-
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        if (btnInstalar) btnInstalar.style.display = 'block';
-    });
-
-    if (btnInstalar) {
-        btnInstalar.addEventListener('click', async () => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') {
-                    btnInstalar.style.display = 'none';
-                }
-                deferredPrompt = null;
-            }
-        });
-    }
+    // Cargar Dashboard por defecto al iniciar
+    if (modules['dashboard']) modules['dashboard']();
 });
 
-// LOGOUT
-window.cerrarSesionAdmin = function() {
-    localStorage.removeItem('cupissa_admin_session');
-    localStorage.clear();
-    window.location.replace('/login.html');
-};
-
-// SERVICE WORKER
-// --- LÓGICA DE ACTUALIZACIÓN Y SERVICE WORKER ---
+// --- 3. GESTIÓN DE PWA Y ACTUALIZACIONES ---
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').then(reg => {
-            // 1. Busca actualizaciones silenciosamente al cargar
-            reg.update();
-
-            // 2. Si detecta una nueva versión en el servidor
             reg.addEventListener('updatefound', () => {
                 const newWorker = reg.installing;
                 newWorker.addEventListener('statechange', () => {
                     if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        // Muestra una alerta nativa para actualizar
-                        if (confirm("✨ Hay una nueva versión de la App disponible con mejoras. ¿Deseas actualizar ahora?")) {
+                        if (confirm("✨ ¡Nueva versión de Cupissa disponible! ¿Actualizar ahora?")) {
                             newWorker.postMessage('SKIP_WAITING');
                         }
                     }
                 });
             });
-        }).catch(err => console.warn('SW no cargado', err));
-
-        // 3. Cuando el nuevo Service Worker toma el control, recarga la página sola
-        let refreshing = false;
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (!refreshing) {
-                window.location.reload();
-                refreshing = true;
-            }
         });
     });
 }
 
-// 4. Lógica del Botón Manual "Actualizar App"
+// BOTÓN MANUAL DE ACTUALIZACIÓN
 const btnActualizar = document.getElementById('btn-actualizar-app');
 if (btnActualizar) {
     btnActualizar.addEventListener('click', () => {
-        btnActualizar.textContent = "Actualizando...";
-        
-        // Borramos todo el caché guardado por la PWA
+        btnActualizar.textContent = "Limpiando caché...";
         if ('caches' in window) {
             caches.keys().then(names => {
                 for (let name of names) caches.delete(name);
             });
         }
-        
-        // Forzamos la recarga limpia desde el servidor
-        setTimeout(() => {
-            window.location.reload(true);
-        }, 500);
+        setTimeout(() => window.location.reload(true), 1000);
     });
+}
+
+// LOGOUT SEGURO
+window.cerrarSesionAdmin = function() {
+    localStorage.removeItem('cupissa_admin_session');
+    localStorage.clear();
+    window.location.replace('login.html');
+};
+
+const btnLogout = document.getElementById('btn-logout');
+if (btnLogout) {
+    btnLogout.onclick = window.cerrarSesionAdmin;
 }

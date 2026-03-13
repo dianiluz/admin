@@ -76,7 +76,6 @@ window.renderUsuarios = function() {
 async function cargarUsuariosERP() {
     const tbody = document.getElementById('tabla-usuarios-body');
     try {
-        // CONEXIÓN DIRECTA SUPABASE
         const { data, error } = await window.supabase.from('usuarios').select('*').order('fecha_creacion', { ascending: false });
         
         if (error) throw error;
@@ -227,7 +226,7 @@ window.abrirModalUsuario = function(emailEdicion = null) {
                     ` : `
                     <div class="detalle-seccion" style="margin-bottom:20px; background:rgba(16, 185, 129, 0.05); border: 1px dashed #10b981; border-radius: 8px;">
                         <p style="color:#166534; font-size: 13px; margin: 0; padding: 12px;">
-                            🔐 <b>Seguridad Inicial:</b> Al crear un usuario, su contraseña inicial por defecto será su número de CC / NIT. El usuario podrá cambiarla luego.
+                            🔐 <b>Seguridad Inicial:</b> Al crear un usuario, su contraseña inicial por defecto será su número de CC / NIT. El usuario recibirá un correo con instrucciones.
                         </p>
                     </div>
                     `}
@@ -248,7 +247,6 @@ window.abrirModalUsuario = function(emailEdicion = null) {
     document.getElementById('btn-x-usuario').addEventListener('click', cerrar);
     document.getElementById('btn-cancelar-us').addEventListener('click', cerrar);
 
-    // Lógica dinámica para mostrar campos bancarios solo si es ASESOR
     document.getElementById('us-tipo').addEventListener('change', (e) => {
         const bloqueBanco = document.getElementById('bloque-banco');
         if (e.target.value === 'ASESOR') {
@@ -258,7 +256,6 @@ window.abrirModalUsuario = function(emailEdicion = null) {
         }
     });
 
-    // GUARDAR O ACTUALIZAR USUARIO EN SUPABASE
     document.getElementById('btn-submit-usuario').addEventListener('click', async (e) => {
         e.preventDefault();
         const btnSubmit = document.getElementById('btn-submit-usuario');
@@ -266,8 +263,8 @@ window.abrirModalUsuario = function(emailEdicion = null) {
         btnSubmit.disabled = true;
 
         const emailInput = document.getElementById('us-email').value.trim();
-        const ccInput = document.getElementById('us-cc').value.replace(/\D/g, ''); // Limpiar a solo números
-        const telInput = document.getElementById('us-telefono').value.replace(/\D/g, ''); // Limpiar a solo números
+        const ccInput = document.getElementById('us-cc').value.replace(/\D/g, ''); 
+        const telInput = document.getElementById('us-telefono').value.replace(/\D/g, ''); 
 
         if (!emailInput) {
             window.mostrarToast("El correo electrónico es obligatorio.", "error");
@@ -289,27 +286,37 @@ window.abrirModalUsuario = function(emailEdicion = null) {
             direccion: document.getElementById('us-direccion').value
         };
 
-        // Si es asesor, agregamos campos bancarios
         if (dataToSave.tipo_usuario === 'ASESOR') {
-            // OJO: Asumo que en tu tabla Supabase tienes estas 3 columnas si usas asesores. Si no las tienes, coméntalas.
             dataToSave.banco = document.getElementById('us-banco').value;
             dataToSave.tipo_cuenta = document.getElementById('us-tipo-cuenta').value;
             dataToSave.num_cuenta = document.getElementById('us-num-cuenta').value;
         }
 
-        // Si es nuevo usuario, ponemos la contraseña por defecto (su CC)
         if (!isEdit) {
-            dataToSave.password_hash = ccInput || "123456"; // Contraseña por defecto temporal
+            dataToSave.password_hash = ccInput || "123456"; 
             dataToSave.fecha_creacion = new Date().toISOString();
         }
 
         try {
-            // Upsert inserta si no existe, o actualiza si ya existe el email
             const { error } = await window.supabase.from('usuarios').upsert(dataToSave, { onConflict: 'email' });
-            
             if (error) throw error;
             
             window.mostrarToast(isEdit ? "Usuario actualizado." : "Usuario creado exitosamente.", "exito");
+
+            // --- LLAMADA AL NUEVO BACKEND PARA ENVIAR CORREO DE BIENVENIDA ---
+            if (!isEdit) {
+                fetch(CUPISSA_CONFIG.API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'enviarCorreoBienvenida',
+                        email: dataToSave.email,
+                        nombre: dataToSave.nombre,
+                        clave_temporal: dataToSave.password_hash
+                    })
+                }).catch(err => console.log("Aviso: El correo de bienvenida pudo no enviarse.", err));
+            }
+
             cerrar(); 
             cargarUsuariosERP();
         } catch (error) {
@@ -320,7 +327,6 @@ window.abrirModalUsuario = function(emailEdicion = null) {
         }
     });
 
-    // Cambiar Contraseña Local (Actualiza el campo en Supabase directamente)
     if (isEdit) {
         document.getElementById('btn-cambiar-clave').addEventListener('click', async () => {
             const nueva = document.getElementById('us-nueva-clave').value;
@@ -337,7 +343,6 @@ window.abrirModalUsuario = function(emailEdicion = null) {
             }
         });
 
-        // Eliminar Usuario en Supabase
         document.getElementById('btn-eliminar-usuario').addEventListener('click', async () => {
             if (confirm("¿Estás segura de eliminar este usuario? Perderá acceso a la plataforma.")) {
                 try {
@@ -355,23 +360,34 @@ window.abrirModalUsuario = function(emailEdicion = null) {
     }
 };
 
-window.verEstadisticasUsuario = function(email, rol, nombre) {
-    // Calculamos estadísticas cruzando la base de pedidos global que ya tienes cargada en el ERP
+window.verEstadisticasUsuario = async function(email, rol, nombre) {
     let totalCompras = 0;
     let cantPedidos = 0;
     let textoFinanzas = "";
 
-    // Obtenemos los pedidos de Supabase (usando la variable global que se debió cargar si pasaste por el modulo pedidos primero)
-    if (window.pedidosGlobales && window.pedidosGlobales.length > 0) {
-        const pedidosDelUsuario = window.pedidosGlobales.filter(p => p.usuario_email === email || p.cliente === nombre);
-        cantPedidos = pedidosDelUsuario.length;
-        
-        pedidosDelUsuario.forEach(p => {
-            if (String(p.estado_pago).toUpperCase() === 'CONFIRMADO') {
-                totalCompras += Number(p.total || 0);
-            }
-        });
+    // Para que las estadísticas SIEMPRE sean reales, consultamos Supabase en vivo
+    const btnOrigen = event.target;
+    btnOrigen.textContent = "Calculando...";
+
+    try {
+        const { data: pedidos, error } = await window.supabase
+            .from('pedidos')
+            .select('estado_pago, total')
+            .or(`usuario_email.eq.${email},cliente.ilike.%${nombre}%`); // Busca por email O por nombre
+            
+        if (!error && pedidos) {
+            cantPedidos = pedidos.length;
+            pedidos.forEach(p => {
+                if (String(p.estado_pago).toUpperCase() === 'CONFIRMADO') {
+                    totalCompras += Number(p.total || 0);
+                }
+            });
+        }
+    } catch (e) {
+        console.error("Fallo obteniendo estadísticas", e);
     }
+
+    btnOrigen.textContent = "Estadísticas"; // Restauramos el botón
 
     if (rol === 'ASESOR') {
         textoFinanzas = `
@@ -385,7 +401,7 @@ window.verEstadisticasUsuario = function(email, rol, nombre) {
             <div style="padding:15px; background:rgba(219, 19, 122, 0.05); border:1px solid rgba(219,19,122,0.3); border-radius:8px; margin-top:15px;">
                 <h4 style="color:var(--color-primario); margin-bottom:5px;">Fidelización Cupissa</h4>
                 <p style="font-size:14px; margin-bottom:5px;"><strong>CupiCoins Estimadas:</strong> ${cupiCoinsAprox.toLocaleString('es-CO')} CC</p>
-                <p style="font-size:11px; color:var(--color-texto-suave);">*Basado en el histórico de compras confirmadas. (Si es 0, es necesario abrir primero el módulo de Pedidos para sincronizar).</p>
+                <p style="font-size:11px; color:var(--color-texto-suave);">*Lectura en tiempo real de la base de datos de compras confirmadas.</p>
             </div>`;
     }
 

@@ -426,20 +426,17 @@ window.abrirModalGestionPedido = async function(idPedido) {
             window.mostrarToast("Pedido actualizado.", "exito"); 
 
             // 2. LÓGICA DE CUPICOINS (SUPABASE NATIVO)
-            // Se otorgan si: Pasa a estado 5 (Entregado), está pagado, y el estado anterior no era 5
             if (nuevoEstado === 5 && parseInt(pedido.estado) !== 5 && estadoPagoNuevo === 'CONFIRMADO') {
                 if (pedido.usuario_email) {
                     const puntosGanados = Math.floor(Number(pedido.total || 0) / 1000) * 5;
                     
                     if (puntosGanados > 0) {
-                        // Buscamos si el cliente ya tiene billetera
                         const { data: billetera } = await window.supabase.from('billeteras').select('*').eq('email', pedido.usuario_email).single();
                         
                         const saldoActual = billetera ? (billetera.saldo || 0) : 0;
                         const otorgadosActual = billetera ? (billetera.otorgados || 0) : 0;
                         const redimidosActual = billetera ? (billetera.redimidos || 0) : 0;
 
-                        // Insertamos o Actualizamos la billetera
                         await window.supabase.from('billeteras').upsert({
                             email: pedido.usuario_email,
                             otorgados: otorgadosActual + puntosGanados,
@@ -461,6 +458,8 @@ window.abrirModalGestionPedido = async function(idPedido) {
             }
             btnSubmit.disabled = false; btnSubmit.textContent = "Guardar Cambios"; 
         }
+    }); // <-- ¡AQUÍ ESTABA EL ERROR! FALTABAN ESTAS LLAVES
+};
 
 // --- CREACIÓN DE PEDIDO ERP ---
 window.abrirModalCrearPedido = async function() {
@@ -564,7 +563,7 @@ window.abrirModalCrearPedido = async function() {
                                 <span>Envío:</span> <strong id="erp-lbl-envio">$0</strong>
                             </div>
                             <div style="display:flex; justify-content:space-between; margin-bottom: 5px; color: var(--color-advertencia);">
-                                <span>Comisión Pasarela (A cargo del cliente):</span> <strong id="erp-lbl-comision">$0</strong>
+                                <span>Comisión Pasarela:</span> <strong id="erp-lbl-comision">$0</strong>
                             </div>
                             <hr style="margin: 10px 0; border: 0; border-top: 1px solid var(--color-borde);">
                             <div style="display:flex; justify-content:space-between; margin-bottom: 5px; font-size: 16px;">
@@ -917,7 +916,7 @@ window.generarRemisionPDF = async function(idPedido) {
     let logoBase64 = null;
     try {
         logoBase64 = await new Promise((resolve) => {
-            const img = new Image(); img.crossOrigin = "Anonymous"; img.src = "/assets/logo.png"; 
+            const img = new Image(); img.crossOrigin = "Anonymous"; img.src = "https://raw.githubusercontent.com/dianiluz/cupissa/main/assets/logo.png"; 
             img.onload = () => {
                 const canvas = document.createElement("canvas"); canvas.width = img.width; canvas.height = img.height;
                 canvas.getContext("2d").drawImage(img, 0, 0); resolve(canvas.toDataURL("image/png"));
@@ -952,7 +951,6 @@ window.generarRemisionPDF = async function(idPedido) {
         pedido.productos.forEach(p => {
             const precioU = Number(p.precio || 0); const cant = Number(p.cantidad || 1);
             
-            // --- MAGIA AÑADIDA: Buscar el nombre real si en la BD dice NULL ---
             let nombreProd = p.producto;
             if (!nombreProd || nombreProd === 'NULL' || nombreProd.trim() === '') {
                 const productoCatalogo = window.productosGlobales.find(prod => prod.ref === p.ref_producto);

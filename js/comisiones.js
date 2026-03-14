@@ -1,3 +1,21 @@
+// Función auxiliar para convertir imágenes a Base64
+const obtenerImagenBase64 = async (url) => {
+    try {
+        // Llamamos las imágenes directo desde tu dominio público para evitar bloqueos de GitHub
+        const response = await fetch(url);
+        const blob = await response.blob();
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    } catch (e) {
+        console.error("Error cargando activo:", url);
+        return null;
+    }
+};
+
 window.renderComisiones = function() {
     const dynamicContent = document.getElementById('dynamic-content');
     dynamicContent.innerHTML = `
@@ -70,19 +88,31 @@ async function cargarColaboradores() {
     }
 }
 
+// 1. REEMPLAZA LA FUNCIÓN DEL MODAL PARA AGREGAR EL CAMPO DE CÉDULA/NIT
 window.abrirModalNuevoColaborador = function() {
     document.querySelectorAll('#modal-nuevo-col').forEach(m => m.remove());
-
     const modalHtml = `
         <div class="modal-overlay" id="modal-nuevo-col">
             <div class="modal-content" style="max-width: 600px;">
                 <button type="button" class="btn-cerrar-x" onclick="this.closest('.modal-overlay').remove()">&times;</button>
                 <h2 style="color:var(--color-primario); margin-bottom:20px;">Registrar Colaborador</h2>
-                
                 <div class="form-grid">
-                    <div class="form-group" style="grid-column: 1 / -1;"><label>Email del Usuario</label><input type="email" id="col-email" placeholder="Debe estar registrado en usuarios" required></div>
-                    <div class="form-group"><label>Usuario Redes (sin @)</label><input type="text" id="col-redes" placeholder="Ej: DIANILUZ" required></div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label>Email del Usuario</label>
+                        <input type="email" id="col-email" placeholder="Debe estar registrado en usuarios" required>
+                    </div>
+                    
                     <div class="form-group">
+                        <label>Cédula o NIT</label>
+                        <input type="text" id="col-documento" placeholder="Ej: 1048289..." required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Usuario Redes (Opcional para Asesor)</label>
+                        <input type="text" id="col-redes" placeholder="Ej: DIANILUZ">
+                    </div>
+
+                    <div class="form-group" style="grid-column: 1 / -1;">
                         <label>Tipo de Alianza</label>
                         <select id="col-tipo">
                             <option value="ASESOR">ASESOR (Venta x Comisión 10%)</option>
@@ -101,39 +131,55 @@ window.abrirModalNuevoColaborador = function() {
 
     document.getElementById('btn-guardar-col').onclick = async () => {
         const email = document.getElementById('col-email').value;
+        const documento = document.getElementById('col-documento').value;
         const redes = document.getElementById('col-redes').value.toUpperCase().replace('@','');
         const tipo = document.getElementById('col-tipo').value;
         
-        if(!email || !redes) { window.mostrarToast("Faltan datos", "error"); return; }
+        // Validación inteligente
+        if(!email || !documento) {
+            window.mostrarToast("Email y Cédula/NIT son obligatorios", "error");
+            return;
+        }
+
+        if(tipo === 'UGC' && !redes) {
+            window.mostrarToast("Para Creadores UGC las redes son obligatorias", "error");
+            return;
+        }
 
         const btn = document.getElementById('btn-guardar-col');
         btn.disabled = true; btn.textContent = "Registrando...";
 
+        // Si no puso redes, su código base será una parte de su email
+        const baseCodigo = redes ? redes : email.split('@')[0].toUpperCase().substring(0, 8);
         const fecha = new Date();
         const diaMes = ("0" + fecha.getDate()).slice(-2) + ("0" + (fecha.getMonth() + 1)).slice(-2);
-        const codigoAuto = redes + diaMes;
-
+        
         try {
             const { error } = await window.supabase.from('colaboradores').insert([{
-                email: email,
-                usuario_redes: '@' + redes,
-                tipo: tipo,
-                codigo_asignado: codigoAuto,
+                email: email, 
+                documento: documento,
+                usuario_redes: redes ? '@' + redes : 'N/A', 
+                tipo: tipo, 
+                codigo_asignado: baseCodigo + diaMes, 
                 estado_contrato: 'PENDIENTE'
             }]);
 
             if (error) throw error;
 
-            window.mostrarToast("¡Colaborador creado exitosamente!", "exito");
             document.getElementById('modal-nuevo-col').remove();
             cargarColaboradores();
+            window.mostrarToast("Colaborador Creado con Éxito", "exito");
         } catch (e) {
-            window.mostrarToast("Error: " + e.message, "error");
+            // Manejamos el error de caché amigablemente por si vuelve a pasar
+            if (e.message && e.message.includes('schema cache')) {
+                window.mostrarToast("Actualiza la página (F5). Supabase está guardando la nueva columna.", "error");
+            } else {
+                window.mostrarToast("Error: " + e.message, "error");
+            }
             btn.disabled = false; btn.textContent = "GENERAR Y REGISTRAR";
         }
     };
 };
-
 window.verPerfilColaborador = async function(email) {
     const { data: col } = await window.supabase.from('colaboradores').select('*').eq('email', email).single();
     if (!col) return;
@@ -175,98 +221,154 @@ window.descargarContratoPDF = async function(email) {
     const { data: col } = await window.supabase.from('colaboradores').select('*').eq('email', email).single();
     const { data: user } = await window.supabase.from('usuarios').select('*').eq('email', email).single();
     
-    if (!col || !user) return;
+    if (!col || !user) return window.mostrarToast("Faltan datos para el contrato", "error");
+
+    window.mostrarToast("Generando documento oficial...", "exito");
 
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    const logoUrl = "assets/logo.png"; // Asegúrate de que la ruta sea correcta
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const fucsia = [219, 19, 122];
+    const margin = 20;
+    const pageWidth = 170; 
+    let y = 50;
 
-    // --- ENCABEZADO LEGAL ---
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(22); doc.setTextColor(219, 19, 122); 
-    doc.text("CUPISSA", 14, 20);
-    
-    doc.setFontSize(8); doc.setTextColor(100, 100, 100);
-    doc.text("CUPISSA S.A.S. | NIT: [TU-NIT-AQUÍ]", 14, 25);
-    doc.text("Barranquilla, Colombia | contacto@cupissa.com", 14, 29);
-    
-    doc.setDrawColor(219, 19, 122); doc.line(14, 32, 196, 32);
+    // Llamamos a las imágenes directo desde tu dominio público para evitar fallos
+    const logoUrl = "https://cupissa.com/assets/logo.png";
+    const firmaUrl = "https://cupissa.com/assets/firma_diana.png";
 
-    // --- TÍTULO DEL CONTRATO ---
-    doc.setFontSize(14); doc.setTextColor(0, 0, 0);
-    const titulo = col.tipo === 'ASESOR' ? "CONTRATO DE COMISIÓN MERCANTIL Y CORRETAJE" : "CONTRATO DE INTERCAMBIO PUBLICITARIO Y DERECHOS DE IMAGEN";
-    doc.text(titulo, 105, 42, { align: "center" });
+    const logoBase64 = await obtenerImagenBase64(logoUrl);
+    const firmaBase64 = await obtenerImagenBase64(firmaUrl);
 
-    // --- IDENTIFICACIÓN DE LAS PARTES ---
+    const checkPage = (addedHeight) => {
+        if (y + addedHeight > 270) {
+            doc.addPage();
+            renderHeader();
+            y = 40;
+        }
+    };
+
+    const renderHeader = () => {
+        if (logoBase64) {
+            try { doc.addImage(logoBase64, 'PNG', 14, 10, 40, 16); } catch(e) {}
+        }
+        doc.setFontSize(8); doc.setTextColor(100);
+        doc.text("CUPISSA S.A.S. | NIT: 901725692", 196, 15, { align: 'right' });
+        doc.setDrawColor(...fucsia); doc.setLineWidth(0.5);
+        doc.line(14, 28, 196, 28);
+    };
+
+    renderHeader();
+
+    doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(0);
+    const titulo = col.tipo === 'ASESOR' ? "CONTRATO DE COMISIÓN MERCANTIL Y CORRETAJE COMERCIAL" : "CONTRATO DE INTERCAMBIO PUBLICITARIO Y CESIÓN DE DERECHOS DE IMAGEN Y CONTENIDO";
+    const titleLines = doc.splitTextToSize(titulo.toUpperCase(), 150);
+    doc.text(titleLines, 105, 38, { align: "center" });
+    y = 38 + (titleLines.length * 7);
+
+    const cedula = col.documento ? String(col.documento) : (user.cc ? String(user.cc) : '_________________');
+    const ciudad = user.ciudad ? String(user.ciudad) : 'BARRANQUILLA';
+
     doc.setFontSize(10); doc.setFont("helvetica", "normal");
-    let introduccion = `Entre los suscritos, CUPISSA S.A.S., representada legalmente por DIANA GONZÁLEZ (en adelante LA EMPRESA) y por la otra parte ${user.nombre.toUpperCase()}, identificado con C.C. ${user.cc || '________'}, (en adelante EL COLABORADOR), acuerdan celebrar el presente contrato bajo las siguientes cláusulas:`;
-    
-    let lineasIntro = doc.splitTextToSize(introduccion, 180);
-    doc.text(lineasIntro, 14, 52);
+    const intro = `De una parte CUPISSA S.A.S., sociedad comercial identificada con NIT 901725692, con domicilio en la ciudad de Barranquilla, Atlántico, Colombia, representada legalmente por DANIELA GONZÁLEZ, identificada con cédula de ciudadanía 1048289246, quien para efectos del presente contrato se denominará LA EMPRESA, y de la otra parte ${user.nombre.toUpperCase()}, con C.C. ${cedula}, domiciliado en ${ciudad} y correo ${user.email} (EL COLABORADOR) quien en adelante se denominará EL COLABORADOR. Las partes acuerdan celebrar el presente contrato, el cual se regirá por las siguientes cláusulas:`;
+    const introLines = doc.splitTextToSize(intro, pageWidth);
+    doc.text(introLines, margin, y);
+    y += (introLines.length * 6) + 5;
 
-    // --- CLAUSULADO LEGAL ---
-    let clausulas = [];
-    if (col.tipo === 'ASESOR') {
-        clausulas = [
-            "PRIMERA. OBJETO: El presente contrato faculta al COLABORADOR para realizar la promoción y corretaje de los productos de LA EMPRESA.",
-            "SEGUNDA. COMISIONES: LA EMPRESA reconocerá un DIEZ POR CIENTO (10%) sobre el valor neto de cada venta efectivamente pagada y confirmada a través del código de asesor asignado.",
-            "TERCERA. NATURALEZA: Las partes declaran que este es un contrato comercial y no existe vínculo laboral, subordinación ni prestación de servicios personales.",
-            "CUARTA. PAGOS: Las comisiones se liquidarán conforme al sistema ERP de la empresa y se pagarán en los términos acordados tras la entrega final al cliente.",
-            "QUINTA. CONFIDENCIALIDAD: EL COLABORADOR se obliga a no revelar información comercial, bases de datos o precios especiales de LA EMPRESA."
-        ];
-    } else {
-        clausulas = [
-            "PRIMERA. OBJETO: EL COLABORADOR realizará contenido audiovisual (UGC) consistente en videos, fotografías y reseñas de los productos entregados por LA EMPRESA.",
-            "SEGUNDA. INTERCAMBIO: El pago por dicho contenido se realizará en especie mediante la entrega de productos de la marca, sin que medie transacción monetaria.",
-            "TERCERA. DERECHOS DE AUTOR E IMAGEN: EL COLABORADOR cede de manera perpetua, global y exclusiva los derechos de uso de su imagen y del contenido creado para que LA EMPRESA los utilice en redes sociales, pauta y web.",
-            "CUARTA. ENTREGABLES: El contenido debe cumplir con los estándares de calidad de la marca y ser publicado en las fechas estipuladas en el cronograma de marketing.",
-            "QUINTA. EXCLUSIVIDAD: EL COLABORADOR se abstendrá de realizar contenido para marcas de competencia directa durante la vigencia de la campaña."
-        ];
-    }
+    // CLAUSULADO ASESOR COMPLETO
+    const clausulasAsesor = [
+        ["PRIMERA. OBJETO DEL CONTRATO", "El presente contrato tiene por objeto facultar a EL COLABORADOR para promover, recomendar y facilitar la comercialización de los productos ofrecidos por CUPISSA S.A.S., actuando como intermediario comercial independiente mediante la generación de ventas a través de enlaces, códigos, recomendaciones o cualquier otro mecanismo autorizado por la empresa. El colaborador actuará de manera autónoma, sin subordinación ni dependencia laboral, limitándose su función a la promoción comercial de los productos."],
+        ["SEGUNDA. NATURALEZA JURÍDICA", "Las partes manifiestan expresamente que el presente contrato constituye una relación comercial de comisión mercantil, conforme a lo establecido en el Código de Comercio colombiano. En consecuencia: no existe relación laboral, no existe subordinación, no se generan prestaciones sociales, no existe horario ni obligación de permanencia. EL COLABORADOR actúa con plena independencia económica y administrativa."],
+        ["TERCERA. COMISIÓN", "LA EMPRESA reconocerá a favor de EL COLABORADOR una comisión equivalente al: DIEZ POR CIENTO (10%) del valor del pedido vendido. Para efectos del cálculo de la comisión: la comisión se calculará únicamente sobre el valor del pedido, excluyendo: costos de envío, comisiones de pasarelas de pago, impuestos, cargos financieros y descuentos promocionales. La comisión será reconocida únicamente cuando el pedido haya sido efectivamente pagado y entregado al cliente final."],
+        ["CUARTA. LIQUIDACIÓN Y PAGO", "Las comisiones generadas serán liquidadas por LA EMPRESA con base en los registros del sistema interno de ventas. El pago de las comisiones se realizará con una periodicidad semanal, siempre que se cumplan las siguientes condiciones: (1) Que el pedido haya sido pagado completamente; (2) Que el pedido haya sido entregado al cliente; (3) Que no exista devolución, cancelación o fraude asociado a la venta. En caso de devolución del producto o reversión del pago, la comisión correspondiente no será reconocida."],
+        ["QUINTA. TERRITORIO", "El presente contrato tendrá aplicación en el territorio de la República de Colombia, sin perjuicio de que el colaborador pueda promover productos en medios digitales accesibles desde otros territorios."],
+        ["SEXTA. NO EXCLUSIVIDAD", "El presente contrato no establece exclusividad. EL COLABORADOR podrá promover o comercializar productos de otras marcas o empresas, siempre que dicha actividad: no afecte la reputación de CUPISSA, no utilice información confidencial de la empresa y no implique competencia desleal."],
+        ["SÉPTIMA. OBLIGACIONES", "EL COLABORADOR se compromete a: (1) Promocionar los productos de CUPISSA de manera ética y transparente; (2) No realizar afirmaciones falsas o engañosas sobre los productos; (3) Utilizar únicamente material publicitario autorizado por la empresa; (4) No alterar los precios oficiales de los productos; (5) Mantener confidencialidad sobre estrategias comerciales de la empresa y (6) No utilizar la marca CUPISSA para fines distintos a la promoción autorizada."],
+        ["OCTAVA. PROTECCIÓN DE MARCA", "La marca CUPISSA, su identidad visual, logotipos, diseños, campañas y materiales publicitarios son propiedad exclusiva de CUPISSA S.A.S. EL COLABORADOR reconoce que: no adquiere derechos de propiedad intelectual, no puede registrar marcas similares, no puede usar la marca sin autorización. El uso indebido de la marca podrá generar terminación inmediata del contrato y acciones legales."],
+        ["NOVENA. CONFIDENCIALIDAD", "EL COLABORADOR se obliga a no divulgar información relacionada con: estrategias comerciales, bases de datos, precios internos, proveedores, información financiera. Esta obligación permanecerá vigente incluso después de terminado el contrato."],
+        ["DÉCIMA. TERMINACIÓN", "El presente contrato tendrá duración indefinida. Podrá darse por terminado por cualquiera de las partes en los siguientes casos: (1) Incumplimiento de las obligaciones contractuales; (2) Uso indebido de la marca; (3) Fraude comercial; y/o (4) Conductas que afecten la reputación de la empresa. La empresa podrá terminar el contrato de forma inmediata en caso de incumplimiento grave."],
+        ["DÉCIMA PRIMERA. PENALIZACIÓN", "En caso de que EL COLABORADOR incurra en conductas que generen perjuicio económico o reputacional a la empresa, CUPISSA S.A.S. podrá: suspender el pago de comisiones pendientes, cancelar el contrato e iniciar las acciones legales correspondientes."],
+        ["DÉCIMA SEGUNDA. PROTECCIÓN DE DATOS", "Las partes declaran que el tratamiento de datos personales se realizará conforme a lo dispuesto en: Ley 1581 de 2012 y Decreto 1377 de 2013. EL COLABORADOR autoriza expresamente a CUPISSA S.A.S. para: almacenar sus datos, procesarlos, utilizarlos para fines administrativos y comerciales relacionados con la relación contractual."],
+        ["DÉCIMA TERCERA. JURISDICCIÓN", "Para todos los efectos legales derivados del presente contrato, las partes acuerdan someterse a la jurisdicción de los jueces de Barranquilla, Atlántico, Colombia."]
+    ];  
 
-    let yPos = 70;
+    // CLAUSULADO UGC COMPLETO 
+    const clausulasUGC = [
+        ["PRIMERA. OBJETO", "El presente contrato tiene por objeto la creación de contenido audiovisual y digital relacionado con los productos de la marca CUPISSA. El colaborador se compromete a producir contenido que podrá incluir, sin limitarse a ellos: videos, reels, fotografías, historias y publicaciones en redes sociales. Este contenido podrá ser publicado tanto en las redes del colaborador como en las plataformas oficiales de la empresa."],
+        ["SEGUNDA. MODALIDAD DE INTERCAMBIO", "La compensación por el contenido generado se realizará mediante intercambio publicitario, consistente en la entrega de productos de la marca. El valor del intercambio será variable, dependiendo de cada campaña o acuerdo específico. No existirá pago en dinero salvo que las partes acuerden lo contrario por escrito."],
+        ["TERCERA. PLAZO DE ENTREGA", "EL COLABORADOR deberá entregar o publicar el contenido dentro de un plazo máximo de quince (15) días calendario contados desde la recepción del producto o desde la fecha acordada para la campaña."],
+        ["CUARTA. CESIÓN DE DERECHOS", "EL COLABORADOR cede a favor de CUPISSA S.A.S. de manera: perpetua, global e irrevocable los derechos de uso, reproducción, modificación, distribución y comunicación pública del contenido generado. Esto incluye su utilización en: redes sociales, publicidad digital, campañas comerciales, páginas web y material promocional."],
+        ["QUINTA. USO DE IMAGEN", "EL COLABORADOR autoriza a CUPISSA S.A.S. a utilizar su imagen personal, voz y nombre artístico en relación con el contenido producido para fines promocionales y publicitarios. Esta autorización se concede sin límite territorial ni temporal."],
+        ["SEXTA. NO EXCLUSIVIDAD", "El presente contrato no establece exclusividad, por lo que el colaborador podrá trabajar con otras marcas."],
+        ["SÉPTIMA. CALIDAD", "El contenido deberá cumplir con estándares mínimos de calidad, incluyendo: buena iluminación, buena resolución y coherencia con la imagen de marca. La empresa podrá solicitar ajustes razonables en el material entregado."],
+        ["OCTAVA. PROTECCIÓN DE MARCA", "EL COLABORADOR se compromete a respetar la identidad visual y reputación de la marca CUPISSA. Se prohíbe el uso de la marca para: contenidos ofensivos, contextos políticos, contenidos ilegales o inapropiados."],
+        ["NOVENA. TERMINACIÓN", "El contrato podrá darse por terminado en caso de: incumplimiento de entregables, uso indebido de la marca y/o conductas que afecten la reputación de la empresa."],
+        ["DÉCIMA. PENALIZACIONES", "En caso de incumplimiento del colaborador, la empresa podrá: exigir la devolución del producto entregado, cancelar futuras colaboraciones e iniciar acciones legales si corresponde."],
+        ["DÉCIMA PRIMERA. DATOS PERSONALES", "Las partes acuerdan cumplir con la legislación colombiana de protección de datos personales."],
+        ["DÉCIMA SEGUNDA. JURISDICCION", "Cualquier controversia será resuelta ante los jueces de Barranquilla, Atlántico, Colombia."]
+    ];
+
+    const clausulas = col.tipo === 'ASESOR' ? clausulasAsesor : clausulasUGC;
+
     clausulas.forEach(c => {
-        let lines = doc.splitTextToSize(c, 180);
-        doc.setFont("helvetica", "bold"); doc.text(lines[0].split(':')[0] + ":", 14, yPos);
-        doc.setFont("helvetica", "normal"); 
-        let textoSinTitulo = lines.join(' ').split(': ')[1];
-        let linesFinal = doc.splitTextToSize(textoSinTitulo, 170);
-        doc.text(linesFinal, 20, yPos + 5);
-        yPos += (linesFinal.length * 5) + 8;
+        checkPage(15);
+        doc.setFont("helvetica", "bold"); doc.text(c[0] + ":", margin, y);
+        y += 5;
+        doc.setFont("helvetica", "normal");
+        const lines = doc.splitTextToSize(c[1], pageWidth - 5);
+        doc.text(lines, margin + 5, y);
+        y += (lines.length * 5) + 5;
     });
 
-    // --- FIRMAS ---
-    const yFirma = 230;
-    doc.setDrawColor(200, 200, 200);
-    doc.line(14, yFirma, 80, yFirma);
-    doc.text("REPRESENTANTE LEGAL", 14, yFirma + 5);
-    doc.text("CUPISSA S.A.S.", 14, yFirma + 9);
+    // CLÁUSULA FIRMA ELECTRÓNICA
+    checkPage(45);
+    doc.setDrawColor(230); doc.setFillColor(248, 248, 248); doc.rect(margin, y, 170, 35, 'F');
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+    doc.text("CLÁUSULA DE FIRMA ELECTRÓNICA Y ACEPTACIÓN DIGITAL", margin + 5, y + 7);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+    const ley = "Las partes acuerdan que el presente contrato podrá ser celebrado y aceptado mediante firma electrónica, conforme a lo establecido en la Ley 527 de 1999, el Decreto 2364 de 2012 y demás normas concordantes de la República de Colombia que regulan el comercio electrónico y la validez jurídica de los mensajes de datos. En consecuencia, el registro digital de aceptación realizado por EL COLABORADOR dentro de la plataforma de CUPISSA S.A.S. tendrá plena validez jurídica y probatoria, produciendo los mismos efectos que una firma manuscrita. La aceptación electrónica del contrato quedará registrada mediante los siguientes elementos de verificación digital: Dirección IP, fecha y hora exacta, correo electrónico y código de validación.";
+    doc.text(doc.splitTextToSize(ley, 160), margin + 5, y + 13);
+    y += 45;
 
-    doc.line(120, yFirma, 190, yFirma);
-    doc.text("EL COLABORADOR", 120, yFirma + 5);
-    doc.text(user.nombre.toUpperCase(), 120, yFirma + 9);
+    // FIRMAS Y SELLOS
+    checkPage(50);
+    const firmaY = y + 15;
+    
+    // Inserción de firma tuya si logró cargarla
+    if (firmaBase64) {
+        try { doc.addImage(firmaBase64, 'PNG', margin + 5, firmaY - 18, 35, 15); } catch(e) {}
+    }
+    
+    doc.setDrawColor(0); doc.line(margin, firmaY, 80, firmaY);
+    doc.setFontSize(9); doc.setFont("helvetica", "bold");
+    doc.text("DANIELA GONZÁLEZ", margin, firmaY + 5);
+    doc.setFont("helvetica", "normal"); doc.text("Representante Legal CUPISSA S.A.S.", margin, firmaY + 9);
 
-    // --- SELLO DE SEGURIDAD IP ---
+    doc.line(120, firmaY, 190, firmaY);
+    doc.setFont("helvetica", "bold"); doc.text(user.nombre.toUpperCase(), 120, firmaY + 5);
+    doc.setFontSize(7); doc.setFont("helvetica", "normal");
+    
     if (col.estado_contrato === 'FIRMADO') {
-        doc.setFillColor(240, 253, 244);
-        doc.rect(120, yFirma - 25, 75, 20, 'F');
-        doc.setFontSize(7); doc.setTextColor(22, 101, 52);
-        doc.text("FIRMADO DIGITALMENTE", 125, yFirma - 20);
-        doc.text(`IP DE ORIGEN: ${col.firma_ip}`, 125, yFirma - 16);
-        doc.text(`FECHA/HORA: ${new Date(col.fecha_firma).toLocaleString()}`, 125, yFirma - 12);
-        doc.text(`CÓDIGO DE VALIDACIÓN: ${btoa(col.email).slice(0,10).toUpperCase()}`, 125, yFirma - 8);
+        doc.setTextColor(...fucsia);
+        doc.text(`FIRMADO ELECTRÓNICAMENTE - IP: ${col.firma_ip}`, 120, firmaY + 9);
+        doc.text(`FECHA: ${new Date(col.fecha_firma).toLocaleString()}`, 120, firmaY + 13);
+        doc.setTextColor(0);
     } else {
-        doc.setTextColor(219, 19, 122);
-        doc.text("PENDIENTE DE FIRMA DIGITAL", 120, yFirma - 5);
+        doc.text("ACEPTACIÓN PENDIENTE EN PANEL", 120, firmaY + 9);
     }
 
-    doc.save(`CONTRATO_CUPISSA_${col.usuario_redes.replace('@','')}.pdf`);
-    window.mostrarToast("Contrato Legal Generado", "exito");
+    // QR DE VERIFICACIÓN
+    const qrData = `VERIFICACIÓN CUPISSA\nContrato: ${col.codigo_asignado}\nColaborador: ${user.email}\nNIT: 901725692\nValidez: Ley 527 de 1999`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrData)}`;
+    try {
+        doc.addImage(qrUrl, 'PNG', 160, firmaY + 15, 30, 30);
+        doc.setFontSize(6); doc.text("VALIDAR AUTENTICIDAD", 160, firmaY + 47);
+    } catch(e) {}
+
+    doc.save(`CONTRATO_CUPISSA_${user.nombre.replace(/\s+/g, '_')}.pdf`);
 };
 
 window.enviarContratoEmail = async function(email) {
     window.mostrarToast("Enviando contrato a " + email + "...", "exito");
-    // Aquí llamaríamos a la función de Apps Script que hicimos antes
     const res = await fetch(CUPISSA_CONFIG.API_URL, {
         method: 'POST',
         body: JSON.stringify({

@@ -1,17 +1,17 @@
-// Cambiar la versión obliga a las apps instaladas a actualizarse
-const CACHE_NAME = 'cupissa-admin-v2'; 
+// Cambiar esta versión obliga a todas las apps instaladas a actualizarse
+const CACHE_NAME = 'cupissa-admin-v3'; 
 
-// INSTALACIÓN: Obliga a la app a tomar el nuevo código inmediatamente
 self.addEventListener('install', (e) => {
-    self.skipWaiting(); 
+    // Ya NO forzamos el skipWaiting aquí para que no interrumpa al usuario mientras trabaja.
+    // Esperaremos a que el usuario le dé "Sí" al botón de actualizar.
 });
 
-// ACTIVACIÓN: Borra la memoria caché vieja y corrupta
 self.addEventListener('activate', (e) => {
     e.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
                 cacheNames.map((cache) => {
+                    // Borra toda la basura vieja
                     if (cache !== CACHE_NAME) {
                         return caches.delete(cache);
                     }
@@ -21,20 +21,19 @@ self.addEventListener('activate', (e) => {
     );
 });
 
-// INTERCEPTOR (ESTRATEGIA: NETWORK FIRST)
 self.addEventListener('fetch', (e) => {
-    // 1. IGNORAR POR COMPLETO EL BACKEND (Dejar pasar libremente)
-    if (e.request.url.includes('script.google.com') || 
-        e.request.url.includes('script.googleusercontent.com') || 
-        e.request.method === 'POST') {
-        return; // La app no se mete aquí, deja que internet haga su trabajo
+    // 1. IGNORAR BACKEND Y BASE DE DATOS (Supabase y Apps Script)
+    if (e.request.url.includes('supabase.co') || 
+        e.request.url.includes('script.google.com') || 
+        e.request.method !== 'GET') {
+        return; 
     }
 
-    // 2. ESTRATEGIA "RED PRIMERO" PARA TUS ARCHIVOS JS, CSS y HTML
+    // 2. ESTRATEGIA "RED PRIMERO" (Network First)
     e.respondWith(
         fetch(e.request)
             .then((response) => {
-                // Si hay conexión, trae el archivo fresco y actualiza la memoria de la App
+                // Si hay internet, guardamos la copia nueva silenciosamente
                 const resClone = response.clone();
                 caches.open(CACHE_NAME).then((cache) => {
                     cache.put(e.request, resClone);
@@ -42,15 +41,15 @@ self.addEventListener('fetch', (e) => {
                 return response;
             })
             .catch(() => {
-                // SOLO si el usuario está sin internet (offline), muestra la copia guardada
+                // Si no hay internet, mostramos lo que tengamos guardado
                 return caches.match(e.request);
             })
     );
 });
 
-// --- NUEVO: Escucha la orden para actualizarse inmediatamente ---
+// 3. RECIBE LA ORDEN DE ACTUALIZAR
 self.addEventListener('message', (event) => {
     if (event.data === 'SKIP_WAITING') {
-        self.skipWaiting();
+        self.skipWaiting(); // Ahora sí, instala la nueva versión de golpe
     }
 });

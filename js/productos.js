@@ -198,7 +198,6 @@ window.abrirModalProducto = function(productoEdicion = null) {
     const nombreProd = productoEdicion ? (productoEdicion.producto || productoEdicion['*producto'] || '') : '';
     const precioProd = productoEdicion ? (productoEdicion.precio_base !== undefined && productoEdicion.precio_base !== null ? productoEdicion.precio_base : (productoEdicion['*precio_base'] || 0)) : 0;
     
-    // Formateamos tallas para mostrarlo limpio en el input
     let tallasProd = productoEdicion ? (productoEdicion.tallas || productoEdicion['*tallas'] || '') : '';
     const tallasProdLimpio = tallasProd.startsWith('#') ? tallasProd.substring(1) : tallasProd;
     
@@ -305,8 +304,8 @@ window.abrirModalProducto = function(productoEdicion = null) {
         </div>
 
         <div class="crop-container" id="crop-container" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:500000; justify-content:center; align-items:center;">
-            <div style="background:white; padding:20px; border-radius:10px; max-width:500px; width:90%;">
-                <div style="height:350px; background:#eee; overflow:hidden;"><img id="image-to-crop" style="max-width:100%;"></div>
+            <div style="background:white; padding:20px; border-radius:10px; max-width:600px; width:90%;">
+                <div style="height:400px; background:#eee; overflow:hidden; display:flex; justify-content:center; align-items:center;"><img id="image-to-crop" style="max-width:100%; max-height:100%;"></div>
                 <div style="margin-top:15px; text-align:right;">
                     <button id="btn-cancel-crop" class="btn-secundario">Cancelar</button>
                     <button id="btn-do-crop" class="btn-primario">Aplicar Recorte</button>
@@ -320,13 +319,11 @@ window.abrirModalProducto = function(productoEdicion = null) {
     document.getElementById('btn-x').onclick = () => document.getElementById('modal-producto').remove();
     document.getElementById('btn-cerrar-modal').onclick = () => document.getElementById('modal-producto').remove();
 
-    // Iniciar Checks de Modalidad (Compra/Alquiler)
     if (esEdicion && modalidadProd) {
         if (modalidadProd.includes('COMPRA')) document.getElementById('check-compra').checked = true;
         if (modalidadProd.includes('ALQUILER')) document.getElementById('check-alquiler').checked = true;
     }
 
-    // --- LÓGICA DE AUTOCOMPLETADO PARA LOS BUSCADORES ---
     const configAutocompletado = [
         { inputId: 'prod-mundo', suggId: 'sugg-mundo', columna: 'mundo' },
         { inputId: 'prod-categoria', suggId: 'sugg-categoria', columna: 'categoria' },
@@ -340,10 +337,9 @@ window.abrirModalProducto = function(productoEdicion = null) {
         
         if (!input || !panel) return;
 
-        // Extraer valores únicos y limpios de esa columna en productosGlobales
         const valoresExistentes = [...new Set(window.productosGlobales
-            .map(p => p[cfg.columna] || p['*' + cfg.columna]) // Manejar nombres con *
-            .filter(v => v && v.trim() !== '' && !v.startsWith('#')) // Filtrar dropdowns (#) y vacíos
+            .map(p => p[cfg.columna] || p['*' + cfg.columna]) 
+            .filter(v => v && v.trim() !== '' && !v.startsWith('#')) 
             .map(v => v.trim())
         )].sort();
 
@@ -364,13 +360,11 @@ window.abrirModalProducto = function(productoEdicion = null) {
                     div.style.fontSize = "13px";
                     div.textContent = v;
                     
-                    // Al hacer clic en la sugerencia
                     div.onclick = function() {
                         input.value = v;
                         panel.style.display = 'none';
                     };
                     
-                    // Efecto hover simple
                     div.onmouseover = function() { this.style.background = "#fdf2f8"; };
                     div.onmouseout = function() { this.style.background = "white"; };
                     
@@ -382,13 +376,10 @@ window.abrirModalProducto = function(productoEdicion = null) {
             }
         });
         
-        // Cerrar panel si se hace clic fuera
         document.addEventListener('click', function(e) {
             if (e.target !== input) panel.style.display = 'none';
         });
     });
-    // --- FIN LÓGICA AUTOCOMPLETADO ---
-
 
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
@@ -409,16 +400,18 @@ window.abrirModalProducto = function(productoEdicion = null) {
             imageToCrop.src = e.target.result;
             cropContainer.style.display = 'flex';
             if(cropper) cropper.destroy();
-            cropper = new Cropper(imageToCrop, { aspectRatio: 1, viewMode: 1 });
+            // MAGIA AQUÍ: viewMode: 1 permite recortar libremente sin forzar 1:1
+            cropper = new Cropper(imageToCrop, { viewMode: 1 });
         };
         reader.readAsDataURL(file);
     }
 
     document.getElementById('btn-do-crop').onclick = (e) => {
         e.preventDefault();
-        const canvas = cropper.getCroppedCanvas({ width: 800, height: 800 });
+        // MAGIA AQUÍ: maxWidth para evitar archivos gigantes, pero respeta el formato libre
+        const canvas = cropper.getCroppedCanvas({ maxWidth: 1000, maxHeight: 1000 });
         base64Recorte = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-        document.getElementById('preview-container').innerHTML = `<img src="${canvas.toDataURL()}" style="width:80px; margin-top:10px; border-radius:8px; border:2px solid #db137a;">`;
+        document.getElementById('preview-container').innerHTML = `<img src="${canvas.toDataURL()}" style="max-width:150px; margin-top:10px; border-radius:8px; border:2px solid #db137a;">`;
         cropContainer.style.display = 'none';
         cropper.destroy();
     };
@@ -472,7 +465,6 @@ window.abrirModalProducto = function(productoEdicion = null) {
                 else console.error("Error subiendo foto:", data.error);
             }
 
-            // --- CÁLCULO MÁGICO DE MODALIDAD (Compra/Alquiler) CON SÍMBOLO # ---
             const checkCompra = document.getElementById('check-compra').checked;
             const checkAlquiler = document.getElementById('check-alquiler').checked;
             let modalidadResult = "";
@@ -481,7 +473,6 @@ window.abrirModalProducto = function(productoEdicion = null) {
             else if (checkCompra) modalidadResult = "#COMPRA";
             else if (checkAlquiler) modalidadResult = "#ALQUILER";
 
-            // AUTO-AGREGAR EL # A LAS TALLAS SI NO LO TIENE
             let tallasGuardar = document.getElementById('prod-tallas').value.trim();
             if (tallasGuardar !== '' && !tallasGuardar.startsWith('#')) {
                 tallasGuardar = '#' + tallasGuardar;
@@ -494,7 +485,7 @@ window.abrirModalProducto = function(productoEdicion = null) {
                 categoria: document.getElementById('prod-categoria').value,
                 subcategoria: document.getElementById('prod-sub').value,
                 tallas: tallasGuardar, 
-                modalidad: modalidadResult, // <--- GUARDAMOS LA MODALIDAD CALCULADA CON #
+                modalidad: modalidadResult,
                 precio_base: Number(document.getElementById('prod-precio').value) || 0,
                 tematica: document.getElementById('prod-tematica').value,
                 variaciones_ids: idsSeleccionados.join(','), 

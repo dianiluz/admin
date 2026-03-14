@@ -1,11 +1,9 @@
 // panel-admin.js
 
 // --- 1. CONEXIÓN A SUPABASE ---
-// La variable 'supabase' ya viene inicializada desde utils.js de forma global
 const db = window.supabase; 
 
 // --- 2. CANDADO DE SEGURIDAD ---
-// Si no hay sesión, rebota al login inmediatamente
 if (!localStorage.getItem('cupissa_admin_session')) {
     window.location.replace('login.html');
 }
@@ -23,6 +21,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const userInfoDiv = document.querySelector('.user-info');
     if (userInfoDiv) {
         userInfoDiv.innerHTML = `<strong>${usuarioActual.nombre}</strong><br><small style="font-size:10px; opacity:0.8; color:#db137a;">${usuarioActual.rol}</small>`;
+    }
+
+    // --- ARREGLO DEL LOGO ---
+    // Forzamos a que el logo principal de la barra lateral cargue desde tu GitHub público
+    const logoImg = document.querySelector('.logo-container img');
+    if(logoImg) {
+        logoImg.src = "https://raw.githubusercontent.com/dianiluz/cupissa/main/assets/logo.png";
+        logoImg.onerror = () => logoImg.alt = "CUPISSA"; // Si falla, muestra el texto
     }
 
     const navButtons = document.querySelectorAll('.nav-btn');
@@ -43,15 +49,14 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // MAPEO DE MÓDULOS (Dashboard, Productos, etc.)
+    // MAPEO DE MÓDULOS (Eliminamos Reportes)
     const modules = {
         dashboard: () => typeof window.renderDashboard === 'function' ? window.renderDashboard() : renderPlaceholder('Dashboard'),
         productos: () => typeof window.renderProductos === 'function' ? window.renderProductos() : renderPlaceholder('Productos'),
         pedidos: () => typeof window.renderPedidos === 'function' ? window.renderPedidos() : renderPlaceholder('Pedidos'),
         usuarios: () => typeof window.renderUsuarios === 'function' ? window.renderUsuarios() : renderPlaceholder('Usuarios'),
         marketing: () => typeof window.renderMarketing === 'function' ? window.renderMarketing() : renderPlaceholder('Marketing'),
-        comisiones: () => typeof window.renderComisiones === 'function' ? window.renderComisiones() : renderPlaceholder('Comisiones'), // <-- ¡ACTUALIZADO!
-        reportes: () => renderPlaceholder('Reportes')
+        comisiones: () => typeof window.renderComisiones === 'function' ? window.renderComisiones() : renderPlaceholder('Comisiones')
     };
 
     function renderPlaceholder(nombre) {
@@ -70,19 +75,15 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('click', (e) => {
             const target = e.currentTarget.getAttribute('data-target');
             
-            // Estética de botones (Color rosa Cupissa al activar)
             navButtons.forEach(b => b.classList.remove('active'));
             e.currentTarget.classList.add('active');
             
-            // Título de sección
             if (sectionTitle) sectionTitle.textContent = e.currentTarget.textContent;
             
-            // Carga de módulo
             if (modules[target]) {
                 modules[target]();
             }
 
-            // Cerrar menú en móvil tras click
             if (window.innerWidth <= 768 && sidebar && mobileOverlay) {
                 sidebar.classList.remove('open');
                 mobileOverlay.classList.remove('active');

@@ -22,7 +22,7 @@ window.mostrarToast = function(mensaje, tipo = 'exito') {
     }, 3500);
 };
 
-// --- TU EVALUADOR DE VARIACIONES ORIGINAL E INTACTO ---
+// --- EVALUADOR DE VARIACIONES ORIGINAL ---
 window.productoCumpleCondicion = function(prod, columnasStr, valoresStr) {
     if (!columnasStr || !valoresStr) return true;
 
@@ -32,7 +32,6 @@ window.productoCumpleCondicion = function(prod, columnasStr, valoresStr) {
     let prodLimpio = {};
     for (let key in prod) {
         let keyLimpia = key.toLowerCase().replace(/[^a-z0-9]/g, '');
-        // Seguridad para campos vacíos en BD
         prodLimpio[keyLimpia] = String(prod[key] || '').toUpperCase().trim();
     }
 
@@ -43,9 +42,7 @@ window.productoCumpleCondicion = function(prod, columnasStr, valoresStr) {
         
         let llaveEncontrada = null;
         for(let keyProd in prodLimpio) {
-            // Bloqueo de falso positivo entre 'subcategoria' y 'categoria'
             if (colBusqueda === 'subcategoria' && keyProd === 'categoria') continue;
-            
             if(keyProd.includes(colBusqueda) || colBusqueda.includes(keyProd)) {
                 llaveEncontrada = keyProd;
                 break;
@@ -54,9 +51,8 @@ window.productoCumpleCondicion = function(prod, columnasStr, valoresStr) {
         
         if (llaveEncontrada) {
             const valorReal = prodLimpio[llaveEncontrada];
-            if (valorReal === "" || valorReal.includes("TOD")) {
-                continue; 
-            }
+            if (valorReal === "" || valorReal.includes("TOD")) continue; 
+            
             if (valorReal !== valorBuscado && !valorReal.includes(valorBuscado) && !valorBuscado.includes(valorReal)) {
                 cumple = false;
                 break;
@@ -152,13 +148,12 @@ function renderizarTablaProductos(productos) {
             urlImagen = prod.imagenurl.startsWith('http') ? prod.imagenurl : `https://raw.githubusercontent.com/${CUPISSA_CONFIG.github.owner}/${CUPISSA_CONFIG.github.repo}/${CUPISSA_CONFIG.github.branch}/${prod.imagenurl.split('|')[0]}`;
         }
         
-        // Lee el precio real para que no salga en cero
         const precioReal = prod.precio_base !== undefined && prod.precio_base !== null ? prod.precio_base : (prod['*precio_base'] || 0);
         const nombreReal = prod.producto || prod['*producto'] || 'Sin Nombre';
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td><img src="${urlImagen}" style="width:50px; height:50px; object-fit:cover; border-radius:4px;" onerror="this.src='assets/logo.png'"></td>
+            <td><img src="${urlImagen}" style="width:50px; height:50px; object-fit:cover; border-radius:4px;" onerror="this.src='https://raw.githubusercontent.com/dianiluz/cupissa/main/assets/logo.png'"></td>
             <td>${prod.ref}</td>
             <td>${nombreReal}</td>
             <td>${prod.mundo || prod['*mundo'] || ''} / ${prod.categoria || ''}</td>
@@ -194,7 +189,6 @@ window.editarProducto = (ref) => {
 };
 
 window.abrirModalProducto = function(productoEdicion = null) {
-    // LIMPIEZA TOTAL PARA EVITAR ERRORES NULL Y FANTASMAS
     document.querySelectorAll('.modal-overlay').forEach(m => m.remove());
     document.querySelectorAll('.crop-container').forEach(c => c.remove());
 
@@ -203,26 +197,27 @@ window.abrirModalProducto = function(productoEdicion = null) {
     
     const nombreProd = productoEdicion ? (productoEdicion.producto || productoEdicion['*producto'] || '') : '';
     const precioProd = productoEdicion ? (productoEdicion.precio_base !== undefined && productoEdicion.precio_base !== null ? productoEdicion.precio_base : (productoEdicion['*precio_base'] || 0)) : 0;
-    const mundoProd = productoEdicion ? (productoEdicion.mundo || productoEdicion['*mundo'] || '') : '';
-    const tallasProd = productoEdicion ? (productoEdicion.tallas || productoEdicion['*tallas'] || '') : '';
+    
+    // Formateamos tallas para mostrarlo limpio en el input
+    let tallasProd = productoEdicion ? (productoEdicion.tallas || productoEdicion['*tallas'] || '') : '';
+    const tallasProdLimpio = tallasProd.startsWith('#') ? tallasProd.substring(1) : tallasProd;
+    
+    const modalidadProd = productoEdicion ? (productoEdicion.modalidad || '') : '';
 
     let seleccionadasIds = [];
     if (productoEdicion && productoEdicion.variaciones_ids) {
         seleccionadasIds = typeof productoEdicion.variaciones_ids === 'string' ? productoEdicion.variaciones_ids.split(',') : productoEdicion.variaciones_ids;
     }
 
-    // CHECKLIST DE VARIACIONES (CON TU DISEÑO ORIGINAL RESTAURADO)
     let checkListHtml = '';
     window.variacionesGlobales.forEach((v) => {
         const idVar = String(v.id);
-        
         let aplicaAuto = false;
         if (esEdicion) aplicaAuto = window.productoCumpleCondicion(productoEdicion, v.columna, v.valor);
         
         const isChecked = seleccionadasIds.includes(idVar) || aplicaAuto;
         const checked = isChecked ? 'checked' : '';
         
-        // Tu visualización original intacta
         checkListHtml += `
             <label style="display:flex; align-items:center; gap:8px; padding:6px; border-bottom:1px solid #f0f0f0; font-size:12px; cursor:pointer;">
                 <input type="checkbox" class="check-var" value="${idVar}" ${checked}>
@@ -242,12 +237,42 @@ window.abrirModalProducto = function(productoEdicion = null) {
                     <div class="form-group"><label>Estado</label><select id="prod-activo"><option value="SI" ${productoEdicion?.activo==='SI'?'selected':''}>SI</option><option value="NO" ${productoEdicion?.activo==='NO'?'selected':''}>NO</option></select></div>
                     <div class="form-group" style="grid-column: 1 / -1;"><label>Nombre</label><input type="text" id="prod-nombre" value="${nombreProd}" required></div>
                     
-                    <div class="form-group"><label>Mundo</label><input type="text" id="prod-mundo" value="${mundoProd}"></div>
-                    <div class="form-group"><label>Categoría</label><input type="text" id="prod-categoria" value="${productoEdicion?.categoria || ''}"></div>
-                    <div class="form-group"><label>Subcategoría</label><input type="text" id="prod-sub" value="${productoEdicion?.subcategoria || ''}"></div>
-                    <div class="form-group"><label>Tallas Base</label><input type="text" id="prod-tallas" value="${tallasProd}"></div>
+                    <div class="form-group" style="position:relative;">
+                        <label>Mundo</label>
+                        <input type="text" id="prod-mundo" value="${productoEdicion?.mundo || productoEdicion?.['*mundo'] || ''}" autocomplete="off">
+                        <div id="sugg-mundo" class="suggestions-panel" style="display:none; position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #ccc; max-height:150px; overflow-y:auto; z-index:100; border-radius:0 0 5px 5px; box-shadow:0 2px 5px rgba(0,0,0,0.1);"></div>
+                    </div>
+                    <div class="form-group" style="position:relative;">
+                        <label>Categoría</label>
+                        <input type="text" id="prod-categoria" value="${productoEdicion?.categoria || ''}" autocomplete="off">
+                        <div id="sugg-categoria" class="suggestions-panel" style="display:none; position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #ccc; max-height:150px; overflow-y:auto; z-index:100; border-radius:0 0 5px 5px; box-shadow:0 2px 5px rgba(0,0,0,0.1);"></div>
+                    </div>
+                    <div class="form-group" style="position:relative;">
+                        <label>Subcategoría</label>
+                        <input type="text" id="prod-sub" value="${productoEdicion?.subcategoria || ''}" autocomplete="off">
+                        <div id="sugg-sub" class="suggestions-panel" style="display:none; position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #ccc; max-height:150px; overflow-y:auto; z-index:100; border-radius:0 0 5px 5px; box-shadow:0 2px 5px rgba(0,0,0,0.1);"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Tallas Base (separar con |)</label>
+                        <input type="text" id="prod-tallas" value="${tallasProdLimpio}" placeholder="Ej: 0-6M|6-12M|2-4">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Modalidad</label>
+                        <div style="display:flex; gap:15px; padding-top:5px; align-items:center;">
+                            <label style="display:flex; align-items:center; gap:5px; font-weight:normal; cursor:pointer;"><input type="checkbox" id="check-compra" style="width:auto;"> Compra</label>
+                            <label style="display:flex; align-items:center; gap:5px; font-weight:normal; cursor:pointer;"><input type="checkbox" id="check-alquiler" style="width:auto;"> Alquiler</label>
+                        </div>
+                    </div>
+
                     <div class="form-group"><label>Precio Base</label><input type="number" id="prod-precio" value="${precioProd}"></div>
-                    <div class="form-group"><label>Temática</label><input type="text" id="prod-tematica" value="${productoEdicion?.tematica || ''}"></div>
+                    
+                    <div class="form-group" style="position:relative;">
+                        <label>Temática</label>
+                        <input type="text" id="prod-tematica" value="${productoEdicion?.tematica || ''}" autocomplete="off">
+                        <div id="sugg-tematica" class="suggestions-panel" style="display:none; position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #ccc; max-height:150px; overflow-y:auto; z-index:100; border-radius:0 0 5px 5px; box-shadow:0 2px 5px rgba(0,0,0,0.1);"></div>
+                    </div>
 
                     <div class="form-group drop-zone" id="drop-zone" style="grid-column: 1 / -1; border: 3px dashed #db137a; background:#fdf2f8; padding:30px; text-align:center; border-radius:15px; cursor:pointer;">
                         <p id="txt-drop" style="color:#db137a; font-weight:bold;">📸 ARRASTRA O HAZ CLIC AQUÍ</p>
@@ -258,8 +283,8 @@ window.abrirModalProducto = function(productoEdicion = null) {
                     <div style="grid-column: 1 / -1; display:grid; grid-template-columns: 1fr 1fr; gap:20px; border:1px solid #db137a; padding:15px; border-radius:10px; background:white;">
                         <div>
                             <label style="color:#db137a; font-weight:bold;">+ Nueva Manual (Se guardará global)</label>
-                            <input type="text" id="m-col" placeholder="Columna (ej: subcategoria|*tallas)" style="width:100%; margin-bottom:5px;">
-                            <input type="text" id="m-val" placeholder="Valor (ej: personalizados|20-22)" style="width:100%; margin-bottom:5px;">
+                            <input type="text" id="m-col" placeholder="Columna (ej: modalidad|*tallas)" style="width:100%; margin-bottom:5px;">
+                            <input type="text" id="m-val" placeholder="Valor (ej: ALQUILER|14-16)" style="width:100%; margin-bottom:5px;">
                             <input type="number" id="m-inc" placeholder="Incremento $" style="width:100%; margin-bottom:10px;">
                             <button type="button" id="btn-manual-add" class="btn-primario" style="width:100%;">Añadir y Guardar</button>
                         </div>
@@ -292,9 +317,78 @@ window.abrirModalProducto = function(productoEdicion = null) {
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 
-    // BINDINGS SEGUROS (Sin riesgo de Null)
     document.getElementById('btn-x').onclick = () => document.getElementById('modal-producto').remove();
     document.getElementById('btn-cerrar-modal').onclick = () => document.getElementById('modal-producto').remove();
+
+    // Iniciar Checks de Modalidad (Compra/Alquiler)
+    if (esEdicion && modalidadProd) {
+        if (modalidadProd.includes('COMPRA')) document.getElementById('check-compra').checked = true;
+        if (modalidadProd.includes('ALQUILER')) document.getElementById('check-alquiler').checked = true;
+    }
+
+    // --- LÓGICA DE AUTOCOMPLETADO PARA LOS BUSCADORES ---
+    const configAutocompletado = [
+        { inputId: 'prod-mundo', suggId: 'sugg-mundo', columna: 'mundo' },
+        { inputId: 'prod-categoria', suggId: 'sugg-categoria', columna: 'categoria' },
+        { inputId: 'prod-sub', suggId: 'sugg-sub', columna: 'subcategoria' },
+        { inputId: 'prod-tematica', suggId: 'sugg-tematica', columna: 'tematica' }
+    ];
+
+    configAutocompletado.forEach(cfg => {
+        const input = document.getElementById(cfg.inputId);
+        const panel = document.getElementById(cfg.suggId);
+        
+        if (!input || !panel) return;
+
+        // Extraer valores únicos y limpios de esa columna en productosGlobales
+        const valoresExistentes = [...new Set(window.productosGlobales
+            .map(p => p[cfg.columna] || p['*' + cfg.columna]) // Manejar nombres con *
+            .filter(v => v && v.trim() !== '' && !v.startsWith('#')) // Filtrar dropdowns (#) y vacíos
+            .map(v => v.trim())
+        )].sort();
+
+        input.addEventListener('input', function() {
+            const val = this.value.trim().toLowerCase();
+            panel.innerHTML = '';
+            
+            if (val.length < 1) { panel.style.display = 'none'; return; }
+
+            const filtrados = valoresExistentes.filter(v => v.toLowerCase().includes(val));
+
+            if (filtrados.length > 0) {
+                filtrados.forEach(v => {
+                    const div = document.createElement('div');
+                    div.style.padding = "8px 10px";
+                    div.style.cursor = "pointer";
+                    div.style.borderBottom = "1px solid #eee";
+                    div.style.fontSize = "13px";
+                    div.textContent = v;
+                    
+                    // Al hacer clic en la sugerencia
+                    div.onclick = function() {
+                        input.value = v;
+                        panel.style.display = 'none';
+                    };
+                    
+                    // Efecto hover simple
+                    div.onmouseover = function() { this.style.background = "#fdf2f8"; };
+                    div.onmouseout = function() { this.style.background = "white"; };
+                    
+                    panel.appendChild(div);
+                });
+                panel.style.display = 'block';
+            } else {
+                panel.style.display = 'none';
+            }
+        });
+        
+        // Cerrar panel si se hace clic fuera
+        document.addEventListener('click', function(e) {
+            if (e.target !== input) panel.style.display = 'none';
+        });
+    });
+    // --- FIN LÓGICA AUTOCOMPLETADO ---
+
 
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
@@ -337,19 +431,23 @@ window.abrirModalProducto = function(productoEdicion = null) {
         const c = document.getElementById('m-col').value;
         const v = document.getElementById('m-val').value;
         const i = document.getElementById('m-inc').value;
+        
         if(c && v && i) {
             const nuevaVar = { columna: c, valor: v, incremento: Number(i) };
             const { error } = await window.supabase.from("variaciones").insert([nuevaVar]);
             if (error) {
                 window.mostrarToast("Error: " + error.message, "error");
             } else {
-                window.mostrarToast("Guardada globalmente. Cierra y abre para verla en lista.", "exito");
-                document.getElementById('m-col').value = ""; document.getElementById('m-val').value = ""; document.getElementById('m-inc').value = "";
+                window.mostrarToast("Variación guardada. Cierra y abre el modal para verla.", "exito");
+                document.getElementById('m-col').value = ""; 
+                document.getElementById('m-val').value = ""; 
+                document.getElementById('m-inc').value = "";
             }
+        } else {
+            window.mostrarToast("Llena los 3 campos de la variación.", "error");
         }
     };
 
-    // EL BOTÓN DE GUARDAR CAMBIOS (AHORA SÍ FUNCIONA Y GUARDA LAS VARIACIONES)
     document.getElementById('btn-submit-prod').onclick = async (e) => {
         e.preventDefault();
         const btn = document.getElementById('btn-submit-prod');
@@ -361,24 +459,32 @@ window.abrirModalProducto = function(productoEdicion = null) {
 
             let pathImg = productoEdicion?.imagenurl || "";
             if (base64Recorte) {
-                const name = `${esteModal.querySelector('#prod-nombre').value.toLowerCase().replace(/\s+/g, '-')}-${refCalculada}.jpg`;
+                const inputNombreVal = document.getElementById('prod-nombre').value;
+                const name = `${inputNombreVal.toLowerCase().replace(/\s+/g, '-')}-${refCalculada}.jpg`;
                 
-                // Ahora le pedimos a nuestro Apps Script que suba la foto por nosotros
                 const res = await fetch(CUPISSA_CONFIG.API_URL, {
                     method: 'POST',
-                    body: JSON.stringify({ 
-                        action: 'subirFotoGithub', 
-                        nombre_archivo: name, 
-                        base64: base64Recorte 
-                    })
+                    body: JSON.stringify({ action: 'subirFotoGithub', nombre_archivo: name, base64: base64Recorte })
                 });
                 
                 const data = await res.json();
-                if (data.success) {
-                    pathImg = data.url;
-                } else {
-                    console.error("Error subiendo foto al backend:", data.error);
-                }
+                if (data.success) pathImg = data.url;
+                else console.error("Error subiendo foto:", data.error);
+            }
+
+            // --- CÁLCULO MÁGICO DE MODALIDAD (Compra/Alquiler) CON SÍMBOLO # ---
+            const checkCompra = document.getElementById('check-compra').checked;
+            const checkAlquiler = document.getElementById('check-alquiler').checked;
+            let modalidadResult = "";
+
+            if (checkCompra && checkAlquiler) modalidadResult = "#COMPRA|ALQUILER";
+            else if (checkCompra) modalidadResult = "#COMPRA";
+            else if (checkAlquiler) modalidadResult = "#ALQUILER";
+
+            // AUTO-AGREGAR EL # A LAS TALLAS SI NO LO TIENE
+            let tallasGuardar = document.getElementById('prod-tallas').value.trim();
+            if (tallasGuardar !== '' && !tallasGuardar.startsWith('#')) {
+                tallasGuardar = '#' + tallasGuardar;
             }
 
             const dataToSave = {
@@ -387,25 +493,24 @@ window.abrirModalProducto = function(productoEdicion = null) {
                 mundo: document.getElementById('prod-mundo').value,
                 categoria: document.getElementById('prod-categoria').value,
                 subcategoria: document.getElementById('prod-sub').value,
-                tallas: document.getElementById('prod-tallas').value,
+                tallas: tallasGuardar, 
+                modalidad: modalidadResult, // <--- GUARDAMOS LA MODALIDAD CALCULADA CON #
                 precio_base: Number(document.getElementById('prod-precio').value) || 0,
                 tematica: document.getElementById('prod-tematica').value,
-                variaciones_ids: idsSeleccionados.join(','), // GUARDAMOS LAS VARIACIONES 
+                variaciones_ids: idsSeleccionados.join(','), 
                 imagenurl: pathImg,
                 activo: document.getElementById('prod-activo').value
             };
 
             const { error } = await window.supabase.from("productos").upsert(dataToSave, { onConflict: 'ref' });
-            
             if (error) throw error;
 
-            window.mostrarToast("¡Producto Guardado con Variaciones!", "exito");
+            window.mostrarToast("¡Producto Guardado con Éxito!", "exito");
             document.getElementById('modal-producto').remove();
             cargarProductos();
 
         } catch (error) {
             console.error("Error BD:", error);
-            // Mensaje de alerta en rojo para evitar que mueras de estrés sin saber qué falló
             window.mostrarToast("Error BD: " + (error.message || "Fallo desconocido"), "error");
             btn.disabled = false;
             btn.textContent = "GUARDAR CAMBIOS";

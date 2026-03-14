@@ -97,6 +97,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // --- 3. GESTIÓN DE PWA Y ACTUALIZACIONES ---
 if ('serviceWorker' in navigator) {
+    let refreshing = false;
+
+    // LA MAGIA: Cuando la App se actualiza internamente, forzamos recargar la pantalla
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+            window.location.reload();
+            refreshing = true;
+        }
+    });
+
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').then(reg => {
             reg.addEventListener('updatefound', () => {
@@ -112,7 +122,6 @@ if ('serviceWorker' in navigator) {
         });
     });
 }
-
 // BOTÓN MANUAL DE ACTUALIZACIÓN
 const btnActualizar = document.getElementById('btn-actualizar-app');
 if (btnActualizar) {

@@ -87,7 +87,6 @@
     <script src="js/login.js"></script>
 
     <script>
-        // Registro del Service Worker (Ruta corregida)
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js').catch(err => console.warn('SW no cargado', err));

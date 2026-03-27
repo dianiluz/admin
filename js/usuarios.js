@@ -12,7 +12,7 @@ window.mostrarToast = function(mensaje, tipo = 'exito') {
     toast.className = `toast-cupissa ${tipo === 'error' ? 'toast-error' : ''}`;
     toast.innerHTML = `<span style="font-size: 18px;">${tipo === 'exito' ? '✅' : '⚠️'}</span> <span>${mensaje}</span>`;
     container.appendChild(toast);
-    setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.5s ease'; setTimeout(() => toast.remove(), 500); }, 4500);
+    setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.5s ease'; setTimeout(() => toast.remove(), 500); }, 3500);
 };
 
 window.renderUsuarios = function() {
@@ -106,7 +106,7 @@ async function cargarDirectorioCompleto() {
             listaUnificada.push({
                 ...e, source_table: 'equipo', id_unificado: e.id_trabajador,
                 rol_unificado: e.rol || 'EMPLEADO', fecha_unificada: e.fecha_vinculacion,
-                estado_unificado: e.estado || 'ACTIVO'
+                estado_unificado: e.estado !== false ? 'ACTIVO' : 'INACTIVO'
             });
         });
 
@@ -172,7 +172,7 @@ window.abrirModalUsuario = function(emailEdicion = null) {
         cc: '', departamento: '', ciudad: '', barrio: '', direccion: '', 
         codigo_referido: '', acepta_politicas: true,
         confianza_nombre: '', confianza_telf: '', confianza_dir: '',
-        codigo_colaborador: '', estado_equipo: 'ACTIVO',
+        codigo_colaborador: '', estado_equipo: true,
         banco: '', tipo_cuenta: '', num_cuenta: ''
     };
     
@@ -182,7 +182,7 @@ window.abrirModalUsuario = function(emailEdicion = null) {
         if (encontrado) {
             u = { 
                 ...u, ...encontrado, 
-                estado_equipo: encontrado.estado || 'ACTIVO',
+                estado_equipo: encontrado.estado !== false,
                 acepta_politicas: encontrado.acepta_politicas !== false
             };
             isEdit = true;
@@ -229,7 +229,6 @@ window.abrirModalUsuario = function(emailEdicion = null) {
                             <select id="us-rol" required ${isEdit ? 'disabled' : ''} style="${isEdit ? 'background:#eee; cursor:not-allowed;' : ''}">
                                 ${opcionesRolHtml}
                             </select>
-                            ${isEdit ? '<small style="color:var(--color-advertencia); display:block; margin-top:5px;">Para evitar pérdida de historiales, el cambio de rol está limitado a opciones de su misma tabla de origen.</small>' : ''}
                         </div>
                     </div>
 
@@ -293,8 +292,8 @@ window.abrirModalUsuario = function(emailEdicion = null) {
                                 <div class="form-group">
                                     <label>Estado Laboral</label>
                                     <select id="us-estado-eq">
-                                        <option value="ACTIVO" ${u.estado_equipo === 'ACTIVO' ? 'selected' : ''}>ACTIVO</option>
-                                        <option value="INACTIVO" ${u.estado_equipo === 'INACTIVO' ? 'selected' : ''}>INACTIVO / SUSPENDIDO</option>
+                                        <option value="true" ${u.estado_equipo ? 'selected' : ''}>ACTIVO</option>
+                                        <option value="false" ${!u.estado_equipo ? 'selected' : ''}>INACTIVO / SUSPENDIDO</option>
                                     </select>
                                 </div>
                                 <div class="form-group"><label>Banco (Para pagos)</label><input type="text" id="eq-banco" value="${u.banco || ''}" placeholder="Ej. Bancolombia"></div>
@@ -346,7 +345,6 @@ window.abrirModalUsuario = function(emailEdicion = null) {
     document.getElementById('btn-x-usuario').addEventListener('click', cerrar);
     document.getElementById('btn-cancelar-us').addEventListener('click', cerrar);
 
-    // AUTOCOMPLETADO DE UBICACIÓN
     const inputBarrio = document.getElementById('us-barrio');
     const resBarrios = document.getElementById('us-res-barrios');
     
@@ -382,7 +380,6 @@ window.abrirModalUsuario = function(emailEdicion = null) {
     document.querySelectorAll('.calc-envio').forEach(el => el.addEventListener('blur', autocompletarDepto));
     document.addEventListener('click', (e) => { if(!inputBarrio.contains(e.target)) resBarrios.style.display = 'none'; });
 
-    // LÓGICA DINÁMICA: MOSTRAR/OCULTAR BLOQUES
     const rolSelect = document.getElementById('us-rol');
     const bloqueClientes = document.getElementById('bloque-clientes');
     const bloqueEquipo = document.getElementById('bloque-equipo');
@@ -424,7 +421,8 @@ window.abrirModalUsuario = function(emailEdicion = null) {
                 rol: rolElegido,
                 telefono: telInput ? Number(telInput) : null,
                 codigo_colaborador: document.getElementById('us-codigo-colab').value,
-                estado: document.getElementById('us-estado-eq').value,
+                estado: document.getElementById('us-estado-eq').value === 'true',
+                // ¡COLUMNAS FINANCIERAS ACTIVADAS!
                 banco: document.getElementById('eq-banco').value || null,
                 tipo_cuenta: document.getElementById('eq-tipo-cuenta').value || null,
                 num_cuenta: document.getElementById('eq-num-cuenta').value || null
@@ -453,7 +451,6 @@ window.abrirModalUsuario = function(emailEdicion = null) {
         try {
             let dbError = null;
 
-            // SISTEMA DE GUARDADO INFALIBLE (INSERT/UPDATE DIRECTO)
             if (isEdit) {
                 const idCol = isTeam ? 'id_trabajador' : 'id_cliente';
                 const idVal = document.getElementById('us-id').value;
@@ -471,7 +468,6 @@ window.abrirModalUsuario = function(emailEdicion = null) {
             
             window.mostrarToast(isEdit ? "Registro actualizado." : "Registro creado exitosamente.", "exito");
 
-            // DISPARADOR DE AUTH Y CORREO PARA NUEVOS USUARIOS
             if (!isEdit) {
                 const claveSegura = `Cupissa${Date.now().toString().slice(-4)}*`;
                 fetch(CUPISSA_CONFIG.API_URL, {
@@ -488,7 +484,6 @@ window.abrirModalUsuario = function(emailEdicion = null) {
             cerrar(); cargarDirectorioCompleto();
         } catch (error) {
             console.error("Error detallado BD:", error);
-            // Mostrará el error exacto que envía Supabase para que no tengamos que adivinar
             window.mostrarToast("Error BD: " + (error.message || "No se pudo guardar"), "error");
             btnSubmit.textContent = isEdit ? "Actualizar Registro" : "Crear y Enviar Bienvenida"; 
             btnSubmit.disabled = false;

@@ -1,5 +1,20 @@
 window.promocionesGlobales = [];
 
+window.mostrarToast = function(mensaje, tipo = 'exito') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = `toast-cupissa ${tipo === 'error' ? 'toast-error' : ''}`;
+    toast.innerHTML = `<span style="font-size: 18px;">${tipo === 'exito' ? '✅' : '⚠️'}</span> <span>${mensaje}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.5s ease'; setTimeout(() => toast.remove(), 500); }, 3500);
+};
+
 window.renderMarketing = function() {
     const dynamicContent = document.getElementById('dynamic-content');
     dynamicContent.innerHTML = `
@@ -11,7 +26,7 @@ window.renderMarketing = function() {
         <div style="display: grid; grid-template-columns: 1fr; gap: 20px;">
             
             <div class="card">
-                <h3 style="color: var(--color-primario); margin-bottom: 15px;">⏳ Cupones y Promociones Flash</h3>
+                <h3 style="color: var(--color-primario); margin-bottom: 15px;">⏳ Cupones y Promociones Activas</h3>
                 <div style="overflow-x: auto;">
                     <table class="data-table">
                         <thead>
@@ -34,25 +49,31 @@ window.renderMarketing = function() {
 
             <div class="card" style="background: rgba(219, 19, 122, 0.02); border: 1px solid rgba(219, 19, 122, 0.1);">
                 <h3 style="color: var(--color-primario); margin-bottom: 15px;">📫 Buzón de Email Marketing</h3>
-                <p style="font-size: 13px; color: var(--color-texto-suave); margin-bottom: 15px;">Envía correos con tu alias oficial. Los envíos masivos se hacen con copia oculta para proteger la privacidad.</p>
+                <p style="font-size: 13px; color: var(--color-texto-suave); margin-bottom: 15px;">Envía correos con tu alias oficial. Los envíos masivos se hacen con copia oculta para proteger la privacidad de los usuarios.</p>
                 
                 <form id="form-email-marketing" class="form-grid">
                     <div class="form-group" style="grid-column: 1 / -1;">
-                        <label>Audiencia (Destinatarios)</label>
+                        <label>Audiencia (Destinatarios de la BD)</label>
                         <select id="mkt-audiencia" required style="font-weight:bold;">
-                            <option value="TODOS">Todos los Usuarios Registrados (Cualquier rol)</option>
-                            <option value="CLIENTE">Solo Clientes Activos</option>
-                            <option value="EMPRESA">Solo Empresas Activas</option>
-                            <option value="ASESOR">Solo Asesores Activos</option>
-                            <option value="EMPLEADO">Solo Empleados Activos</option>
-                            <option value="ADMIN">Solo Administradores</option>
-                            <option value="INDIVIDUAL">👤 Usuario Específico (Buscar individualmente)</option>
+                            <option value="TODOS">Toda la Base de Datos (Clientes y Equipo Activos)</option>
+                            <optgroup label="Tabla: CLIENTES">
+                                <option value="CLIENTE">Solo Clientes Activos</option>
+                                <option value="EMPRESA">Solo Empresas (Mayoristas) Activas</option>
+                            </optgroup>
+                            <optgroup label="Tabla: EQUIPO">
+                                <option value="ASESOR">Solo Asesores Activos</option>
+                                <option value="EMPLEADO">Solo Empleados Activos</option>
+                                <option value="ADMIN">Solo Administradores</option>
+                            </optgroup>
+                            <optgroup label="Búsqueda Manual">
+                                <option value="INDIVIDUAL">👤 Usuario Específico (Buscar individualmente)</option>
+                            </optgroup>
                         </select>
                     </div>
 
                     <div class="form-group" id="cont-email-individual" style="display:none; grid-column: 1 / -1; position:relative;">
-                        <label style="color:var(--color-primario);">Buscar Usuario (Por nombre, correo o CC)</label>
-                        <input type="text" id="mkt-buscador-usuario" placeholder="🔍 Escribe para buscar en la base de datos..." autocomplete="off">
+                        <label style="color:var(--color-primario);">Buscar Usuario (Cruza ambas tablas)</label>
+                        <input type="text" id="mkt-buscador-usuario" placeholder="🔍 Escribe para buscar por nombre o correo..." autocomplete="off">
                         <div id="mkt-res-usuarios" class="resultados-flotantes" style="display:none; width:100%; position:absolute; top:100%; left:0; z-index:9999; background:#fff; border:1px solid #ccc; max-height:200px; overflow-y:auto; box-shadow:0 4px 6px rgba(0,0,0,0.1);"></div>
                         <input type="hidden" id="mkt-email-ind">
                     </div>
@@ -93,7 +114,7 @@ window.renderMarketing = function() {
 
     document.getElementById('btn-crear-promo').addEventListener('click', () => window.abrirModalPromo());
 
-    // LÓGICA DE AUDIENCIA Y BUSCADOR INTELIGENTE
+    // LÓGICA DE AUDIENCIA Y BUSCADOR INTELIGENTE EN 2 TABLAS
     const audienciaSelect = document.getElementById('mkt-audiencia');
     const contInd = document.getElementById('cont-email-individual');
     const buscadorMkt = document.getElementById('mkt-buscador-usuario');
@@ -115,17 +136,19 @@ window.renderMarketing = function() {
         resMkt.innerHTML = ''; hiddenEmailMkt.value = '';
         if (val.length < 3) { resMkt.style.display = 'none'; return; }
 
-        // Búsqueda en vivo en Supabase
-        const { data, error } = await window.supabase.from('usuarios')
-            .select('nombre, email, cc')
-            .or(`nombre.ilike.%${val}%,email.ilike.%${val}%,cc.eq.${parseInt(val) || 0}`)
-            .limit(10);
+        // Búsqueda simultánea en clientes y equipo
+        const { data: cData } = await window.supabase.from('clientes')
+            .select('nombre, email').or(`nombre.ilike.%${val}%,email.ilike.%${val}%`).limit(5);
+        const { data: eData } = await window.supabase.from('equipo')
+            .select('nombre, email').or(`nombre.ilike.%${val}%,email.ilike.%${val}%`).limit(5);
         
-        if (!error && data && data.length > 0) {
-            data.forEach(m => {
+        const mixData = [...(cData || []), ...(eData || [])];
+        
+        if (mixData.length > 0) {
+            mixData.forEach(m => {
                 const div = document.createElement('div');
                 div.style.padding = '10px'; div.style.cursor = 'pointer'; div.style.borderBottom = '1px solid #eee';
-                div.innerHTML = `<strong style="color:var(--color-primario);">${m.nombre}</strong><br><small>${m.email} | CC: ${m.cc || 'N/A'}</small>`;
+                div.innerHTML = `<strong style="color:var(--color-primario);">${m.nombre}</strong><br><small>${m.email}</small>`;
                 
                 div.onclick = () => {
                     buscadorMkt.value = `${m.nombre} (${m.email})`;
@@ -145,7 +168,6 @@ window.renderMarketing = function() {
         if(!buscadorMkt.contains(e.target)) resMkt.style.display = 'none';
     });
 
-    // Envío de Email Marketing
     document.getElementById('form-email-marketing').addEventListener('submit', dispararEmailMarketing);
 
     cargarPromociones();
@@ -154,14 +176,14 @@ window.renderMarketing = function() {
 async function cargarPromociones() {
     const tbody = document.getElementById('tabla-promos-body');
     try {
-        const { data, error } = await window.supabase.from('promociones').select('*').order('fecha_limite', { ascending: true });
+        const { data, error } = await window.supabase.from('promociones').select('*').order('id_promo', { ascending: true });
         if (error) throw error;
 
         window.promocionesGlobales = data || [];
         renderizarTablaPromociones(window.promocionesGlobales);
     } catch (e) {
         console.error(e);
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: red;">Error al cargar promociones.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: red;">Error al cargar promociones de la BD.</td></tr>`;
     }
 }
 
@@ -177,32 +199,32 @@ function renderizarTablaPromociones(promos) {
     const ahora = new Date();
 
     promos.forEach(p => {
-        const esCupon = p.tipo === 'CUPON_DESCUENTO';
-        const infoDesc = esCupon ? `${p.descuento_porcentaje}% OFF` : `Cuesta: ${p.costo_cupicoins} CC`;
+        const esCupon = p.tipo_promo === 'CUPON_DESCUENTO';
+        const infoDesc = esCupon ? `${p.valor_descuento || 0}% OFF` : `Cuesta: ${p.cupicoins_requiere || 0} CC`;
         
-        let infoAlcance = `<b>${p.alcance}</b>`;
+        let infoAlcance = `<b>${p.alcance || 'WEB'}</b>`;
         if (p.alcance !== 'WEB' && p.alcance_valor) infoAlcance += `<br><small>${p.alcance_valor}</small>`;
 
-        let txtTiempo = '--';
-        let colorSemaforo = '';
+        let txtTiempo = 'Indefinido';
+        let colorSemaforo = 'estado-activo';
         if (p.fecha_limite) {
             const limite = new Date(p.fecha_limite);
             if (limite < ahora) {
                 txtTiempo = 'Vencido';
-                colorSemaforo = 'estado-6'; 
+                colorSemaforo = 'estado-inactivo'; 
             } else {
                 const diffHoras = Math.floor((limite - ahora) / (1000 * 60 * 60));
                 if(diffHoras < 24) {
-                    txtTiempo = `¡En ${diffHoras} horas! ⏳`;
-                    colorSemaforo = 'estado-4'; 
+                    txtTiempo = `¡En ${diffHoras}h! ⏳`;
+                    colorSemaforo = 'estado-4'; // Naranja/Warning
                 } else {
                     txtTiempo = `En ${Math.floor(diffHoras/24)} días`;
-                    colorSemaforo = 'estado-3'; 
+                    colorSemaforo = 'estado-3'; // Amarillo o Verde claro
                 }
             }
         }
 
-        const estadoClase = String(p.activa) === 'SI' ? 'estado-activo' : 'estado-inactivo';
+        const estadoClase = p.activa ? 'estado-activo' : 'estado-inactivo';
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -211,11 +233,9 @@ function renderizarTablaPromociones(promos) {
             <td style="color:var(--color-primario); font-weight:bold;">${infoDesc}</td>
             <td style="font-size:12px;">${infoAlcance}</td>
             <td><span class="semaforo-estado ${colorSemaforo}">${txtTiempo}</span></td>
-            <td><span class="semaforo-estado ${estadoClase}">${String(p.activa) === 'SI' ? 'ACTIVA' : 'PAUSADA'}</span></td>
+            <td><span class="semaforo-estado ${estadoClase}">${p.activa ? 'ACTIVA' : 'PAUSADA'}</span></td>
             <td>
-                <div style="display:flex; gap:5px; flex-direction:column;">
-                    <button class="btn-accion btn-eliminar" onclick="window.eliminarPromocion('${p.id}')">Eliminar</button>
-                </div>
+                <button class="btn-accion btn-eliminar" onclick="window.eliminarPromocion('${p.id_promo}')">Eliminar</button>
             </td>
         `;
         tbody.appendChild(tr);
@@ -223,7 +243,7 @@ function renderizarTablaPromociones(promos) {
 }
 
 window.abrirModalPromo = function() {
-    const idGenerado = "PROMO-" + Date.now().toString().slice(-6);
+    const idGenerado = "PRM-" + Date.now().toString().slice(-6);
 
     const modalHtml = `
         <div class="modal-overlay" id="modal-promo">
@@ -235,48 +255,54 @@ window.abrirModalPromo = function() {
                     <div class="form-group" style="grid-column: 1 / -1;">
                         <label>Tipo de Dinámica</label>
                         <select id="prm-tipo" required style="font-weight:bold; color:var(--color-primario);">
-                            <option value="CUPON_DESCUENTO">🎟️ Cupón de Descuento Flash (Temu Style)</option>
+                            <option value="CUPON_DESCUENTO">🎟️ Cupón de Descuento (%)</option>
                             <option value="PROMO_CUPICOINS">💎 Promoción Canjeable por CupiCoins</option>
                         </select>
                     </div>
 
                     <div class="form-group"><label>ID Interno</label><input type="text" id="prm-id" value="${idGenerado}" readonly style="background:#eee;"></div>
-                    <div class="form-group"><label>Estado Inicial</label><select id="prm-activa"><option value="SI">ACTIVA</option><option value="NO">PAUSADA</option></select></div>
+                    <div class="form-group">
+                        <label>Estado Inicial</label>
+                        <select id="prm-activa">
+                            <option value="true">ACTIVA</option>
+                            <option value="false">PAUSADA</option>
+                        </select>
+                    </div>
 
-                    <div class="form-group" style="grid-column: 1 / -1;"><label>Título Público</label><input type="text" id="prm-titulo" placeholder="Ej: Flash Sale Princesas" required></div>
+                    <div class="form-group" style="grid-column: 1 / -1;"><label>Título Público</label><input type="text" id="prm-titulo" placeholder="Ej: Flash Sale de Mitad de Año" required></div>
                     
                     <div class="form-group" id="bloque-codigo"><label>Código del Cupón (Ej: FLASH50)</label><input type="text" id="prm-codigo" style="text-transform:uppercase;"></div>
                     <div class="form-group" id="bloque-descuento"><label>% Descuento (Solo número)</label><input type="number" id="prm-desc" value="0" min="0" max="100"></div>
-                    <div class="form-group" id="bloque-costo" style="display:none;"><label>Costo en CupiCoins</label><input type="number" id="prm-costo" value="0" min="0"></div>
+                    <div class="form-group" id="bloque-costo" style="display:none;"><label>CupiCoins Requeridas</label><input type="number" id="prm-costo" value="0" min="0"></div>
 
                     <div class="form-group" style="grid-column: 1 / -1;">
-                        <label>Fecha y Hora Límite (Para el cronómetro) ⏳</label>
-                        <input type="datetime-local" id="prm-fecha" required>
+                        <label>Fecha y Hora Límite (Dejar vacío si es indefinido) ⏳</label>
+                        <input type="datetime-local" id="prm-fecha">
                     </div>
 
                     <div class="detalle-seccion" style="grid-column: 1 / -1; background:#f9fafb; margin-top:10px;">
-                        <h4 style="margin-bottom:10px;">Alcance del Descuento</h4>
+                        <h4 style="margin-bottom:10px;">Alcance del Descuento / Promo</h4>
                         <div style="display:flex; gap:10px;">
                             <div style="flex:1;">
                                 <label>Aplicar a:</label>
                                 <select id="prm-alcance" required>
-                                    <option value="WEB">Toda la Tienda (Carrito)</option>
+                                    <option value="WEB">Toda la Tienda (Global)</option>
                                     <option value="MUNDO">Un Mundo Específico</option>
                                     <option value="CATEGORIA">Una Categoría</option>
-                                    <option value="PRODUCTO">Un Producto Específico (Ref)</option>
+                                    <option value="PRODUCTO">Un Producto (Ref)</option>
                                 </select>
                             </div>
                             <div style="flex:1;" id="bloque-alcance-valor">
-                                <label>Valor del Alcance:</label>
+                                <label>Especifique el Alcance:</label>
                                 <input type="text" id="prm-alcance-valor" placeholder="Ej: MUNDO TEXTIL o CUP2025001">
                             </div>
                         </div>
-                        <small style="color:#666; display:block; margin-top:5px;">Si eliges "Toda la Tienda", deja el valor vacío.</small>
+                        <small style="color:#666; display:block; margin-top:5px;">Si eliges "Toda la Tienda", el sistema bloqueará el campo de valor.</small>
                     </div>
 
                     <div class="modal-actions" style="grid-column: 1 / -1;">
                         <button type="button" class="btn-secundario" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
-                        <button type="submit" class="btn-primario" id="btn-save-promo">Activar Dinámica</button>
+                        <button type="submit" class="btn-primario" id="btn-save-promo">Guardar Dinámica</button>
                     </div>
                 </form>
             </div>
@@ -287,22 +313,32 @@ window.abrirModalPromo = function() {
 
     const selectTipo = document.getElementById('prm-tipo');
     const selectAlcance = document.getElementById('prm-alcance');
+    const inputAlcanceValor = document.getElementById('prm-alcance-valor');
     
     selectTipo.addEventListener('change', (e) => {
         if(e.target.value === 'CUPON_DESCUENTO') {
             document.getElementById('bloque-codigo').style.display = 'block';
             document.getElementById('bloque-descuento').style.display = 'block';
             document.getElementById('bloque-costo').style.display = 'none';
+            document.getElementById('prm-costo').value = 0;
         } else {
             document.getElementById('bloque-codigo').style.display = 'none';
             document.getElementById('bloque-descuento').style.display = 'none';
             document.getElementById('bloque-costo').style.display = 'block';
+            document.getElementById('prm-desc').value = 0; 
+            document.getElementById('prm-codigo').value = '';
         }
     });
 
     selectAlcance.addEventListener('change', (e) => {
-        document.getElementById('prm-alcance-valor').disabled = (e.target.value === 'WEB');
-        if(e.target.value === 'WEB') document.getElementById('prm-alcance-valor').value = '';
+        if (e.target.value === 'WEB') {
+            inputAlcanceValor.disabled = true;
+            inputAlcanceValor.value = '';
+            inputAlcanceValor.style.background = '#eee';
+        } else {
+            inputAlcanceValor.disabled = false;
+            inputAlcanceValor.style.background = '#fff';
+        }
     });
     selectAlcance.dispatchEvent(new Event('change'));
 
@@ -312,16 +348,16 @@ window.abrirModalPromo = function() {
         btn.textContent = "Guardando..."; btn.disabled = true;
 
         const dataToSave = {
-            id: document.getElementById('prm-id').value,
-            tipo: document.getElementById('prm-tipo').value,
-            activa: document.getElementById('prm-activa').value,
+            id_promo: document.getElementById('prm-id').value,
+            tipo_promo: document.getElementById('prm-tipo').value,
+            activa: document.getElementById('prm-activa').value === 'true',
             titulo: document.getElementById('prm-titulo').value,
             codigo: document.getElementById('prm-codigo').value.toUpperCase() || null,
-            descuento_porcentaje: parseInt(document.getElementById('prm-desc').value) || 0,
-            costo_cupicoins: parseInt(document.getElementById('prm-costo').value) || 0,
-            fecha_limite: document.getElementById('prm-fecha').value || null,
+            valor_descuento: parseInt(document.getElementById('prm-desc').value) || 0,
+            cupicoins_requiere: parseInt(document.getElementById('prm-costo').value) || 0,
             alcance: document.getElementById('prm-alcance').value,
-            alcance_valor: document.getElementById('prm-alcance-valor').value || null
+            alcance_valor: document.getElementById('prm-alcance-valor').value || null,
+            fecha_limite: document.getElementById('prm-fecha').value || null
         };
 
         try {
@@ -333,15 +369,15 @@ window.abrirModalPromo = function() {
             cargarPromociones();
         } catch (err) {
             window.mostrarToast("Error BD: " + err.message, "error");
-            btn.textContent = "Activar Dinámica"; btn.disabled = false;
+            btn.textContent = "Guardar Dinámica"; btn.disabled = false;
         }
     });
 };
 
-window.eliminarPromocion = async function(id) {
-    if(confirm("¿Segura de eliminar esta promoción? Desaparecerá de la tienda de inmediato.")) {
+window.eliminarPromocion = async function(idPromo) {
+    if(confirm("¿Segura de eliminar esta promoción? Dejará de funcionar de inmediato.")) {
         try {
-            const { error } = await window.supabase.from('promociones').delete().eq('id', id);
+            const { error } = await window.supabase.from('promociones').delete().eq('id_promo', idPromo);
             if(error) throw error;
             window.mostrarToast("Promoción eliminada.", "exito");
             cargarPromociones();
@@ -351,7 +387,7 @@ window.eliminarPromocion = async function(id) {
     }
 };
 
-// MOTOR DE ENVÍO DE CORREOS MASIVOS
+// MOTOR EXTRACCIÓN Y ENVÍO DE CORREOS MASIVOS
 async function dispararEmailMarketing(e) {
     e.preventDefault();
     const btn = document.getElementById('btn-enviar-mkt');
@@ -359,40 +395,42 @@ async function dispararEmailMarketing(e) {
     const asunto = document.getElementById('mkt-asunto').value;
     const mensaje = document.getElementById('mkt-mensaje').value;
     
-    // Novedad: Botones dinámicos
     const btnTexto = document.getElementById('mkt-btn-texto').value.trim();
     const btnUrl = document.getElementById('mkt-btn-url').value.trim();
 
     let destinatarios = [];
 
-    btn.textContent = "Obteniendo lista..."; btn.disabled = true;
+    btn.textContent = "Obteniendo base de datos..."; btn.disabled = true;
 
     try {
         if (audiencia === 'INDIVIDUAL') {
             const indEmail = document.getElementById('mkt-email-ind').value;
             if(!indEmail) throw new Error("Debes buscar y seleccionar el correo del destinatario.");
             destinatarios.push(indEmail);
+        } else if (audiencia === 'TODOS') {
+            // Extrae correos de clientes activos
+            const { data: d1 } = await window.supabase.from('clientes').select('email').eq('acepta_politicas', true);
+            // Extrae correos de equipo activo
+            const { data: d2 } = await window.supabase.from('equipo').select('email').eq('estado', true);
+            destinatarios = [...(d1||[]), ...(d2||[])].map(u => u.email).filter(e => e);
+        } else if (['CLIENTE', 'EMPRESA'].includes(audiencia)) {
+            const { data, error } = await window.supabase.from('clientes').select('email').eq('nivel_cuenta', audiencia).eq('acepta_politicas', true);
+            if (error) throw error;
+            destinatarios = (data||[]).map(u => u.email).filter(e => e);
         } else {
-            let query = window.supabase.from('usuarios').select('email');
-            // Si elige un rol específico, lo filtramos. Si elige TODOS, trae a todos.
-            if (audiencia !== 'TODOS') {
-                query = query.eq('tipo_usuario', audiencia).eq('activo', 'SI');
-            }
-            
-            const { data, error } = await query;
-            if(error) throw error;
-            
-            destinatarios = data.map(u => u.email).filter(e => e); // Filtramos vacíos
+            const { data, error } = await window.supabase.from('equipo').select('email').eq('rol', audiencia).eq('estado', true);
+            if (error) throw error;
+            destinatarios = (data||[]).map(u => u.email).filter(e => e);
         }
 
-        if (destinatarios.length === 0) throw new Error("No se encontraron usuarios para esta audiencia.");
+        if (destinatarios.length === 0) throw new Error("No hay usuarios activos que coincidan con esa audiencia.");
 
-        if (!confirm(`Se enviará este correo a ${destinatarios.length} persona(s). ¿Proceder?`)) {
+        if (!confirm(`El correo se enviará a ${destinatarios.length} dirección(es). ¿Proceder?`)) {
             btn.textContent = "🚀 Disparar Campaña de Correos"; btn.disabled = false;
             return;
         }
 
-        btn.textContent = "Enviando (No cierres la página)...";
+        btn.textContent = "Enviando (No cierres la pestaña)...";
 
         const mensajeHtml = mensaje.replace(/\n/g, "<br>");
 
@@ -403,14 +441,14 @@ async function dispararEmailMarketing(e) {
                 destinatarios: destinatarios,
                 asunto: asunto,
                 cuerpo_html: mensajeHtml,
-                btn_texto: btnTexto, // Mandamos el botón opcional
+                btn_texto: btnTexto, 
                 btn_url: btnUrl
             })
         });
 
         const dataRes = await response.json();
         if (dataRes.success) {
-            window.mostrarToast(`¡Campaña disparada a ${dataRes.enviados} usuarios!`, "exito");
+            window.mostrarToast(`¡Campaña disparada a ${dataRes.enviados} cuentas de correo!`, "exito");
             document.getElementById('form-email-marketing').reset();
             document.getElementById('cont-email-individual').style.display = 'none';
         } else {

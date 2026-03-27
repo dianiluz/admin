@@ -22,11 +22,39 @@ window.mostrarToast = function(mensaje, tipo = 'exito') {
     }, 3500);
 };
 
-// --- EVALUADOR DE VARIACIONES (MULTICOLUMNA BLINDADO) ---
+// --- MOTOR GLOBAL CASCADA DE IMÁGENES ---
+window.manejarErrorImagen = function(imgElement, ref, nombre) {
+    if (!imgElement) return;
+    
+    let intento = parseInt(imgElement.getAttribute('data-intento') || '0');
+    const baseUrl = `https://raw.githubusercontent.com/${CUPISSA_CONFIG.github.owner}/${CUPISSA_CONFIG.github.repo}/${CUPISSA_CONFIG.github.branch}/assets/productos`;
+    const logoUrl = `https://raw.githubusercontent.com/dianiluz/cupissa/main/assets/logo.png`;
+    
+    const nombreFmt = String(nombre || '').toLowerCase().replace(/['"]/g, '').replace(/\s+/g, '-');
+    const refFmt = String(ref || '').replace(/['"]/g, '');
+    
+    const rutasCascada = [
+        `${baseUrl}/${refFmt}.png`,
+        `${baseUrl}/${refFmt}.jpg`,
+        `${baseUrl}/${nombreFmt}-${refFmt}.png`,
+        `${baseUrl}/${nombreFmt}-${refFmt}.jpg`,
+        `${baseUrl}/${nombreFmt}.png`,
+        `${baseUrl}/${nombreFmt}.jpg`
+    ];
+
+    if (intento < rutasCascada.length) {
+        imgElement.setAttribute('data-intento', intento + 1);
+        imgElement.src = rutasCascada[intento];
+    } else {
+        imgElement.onerror = null;
+        imgElement.src = logoUrl;
+    }
+};
+
+// --- EVALUADOR DE VARIACIONES ---
 window.productoCumpleCondicion = function(prod, columnasStr, valoresStr) {
     if (!columnasStr || !valoresStr) return true;
 
-    // Detectar si usan coma (nuevo formato) o separador vertical (viejo)
     const separadorCol = String(columnasStr).includes(',') ? ',' : '|';
     const separadorVal = String(valoresStr).includes(',') ? ',' : '|';
 
@@ -47,7 +75,6 @@ window.productoCumpleCondicion = function(prod, columnasStr, valoresStr) {
         let llaveEncontrada = null;
         for(let keyProd in prodLimpio) {
             if (colBusqueda === 'subcategoria' && keyProd === 'categoria') continue;
-            
             if(keyProd.includes(colBusqueda) || colBusqueda.includes(keyProd)) {
                 llaveEncontrada = keyProd;
                 break;
@@ -57,7 +84,6 @@ window.productoCumpleCondicion = function(prod, columnasStr, valoresStr) {
         if (llaveEncontrada) {
             const valorReal = prodLimpio[llaveEncontrada];
             if (valorReal === "" || valorReal.includes("TOD")) continue; 
-            
             if (valorReal !== valorBuscado && !valorReal.includes(valorBuscado) && !valorBuscado.includes(valorReal)) {
                 cumpleTodas = false;
                 break;
@@ -76,10 +102,6 @@ window.crearProductoDesdeERP = function(nombreInicial) {
         setTimeout(() => {
             const inputNombre = document.getElementById('prod-nombre');
             if (inputNombre) inputNombre.value = nombreInicial;
-            const modalesProd = document.querySelectorAll('#modal-producto');
-            const modalProd = modalesProd[modalesProd.length - 1]; 
-            if (modalProd) modalProd.style.zIndex = '200000'; 
-            document.querySelectorAll('.res-prod-flotante').forEach(el => el.style.display = 'none');
         }, 100);
     } else {
         window.mostrarToast("El módulo de productos no está cargado.", "error");
@@ -121,7 +143,7 @@ window.renderProductos = function() {
         const term = e.target.value.toLowerCase();
         const filtrados = window.productosGlobales.filter(p => 
             (p.ref || "").toLowerCase().includes(term) || 
-            (p.producto || p['*producto'] || "").toLowerCase().includes(term) ||
+            (p.producto || "").toLowerCase().includes(term) ||
             (p.categoria || "").toLowerCase().includes(term)
         );
         renderizarTablaProductos(filtrados);
@@ -144,7 +166,7 @@ async function cargarProductos() {
         renderizarTablaProductos(window.productosGlobales);
     } catch (error) { 
         console.error("Error al cargar:", error); 
-        tbody.innerHTML = `<tr><td colspan="7" style="color:red; text-align:center;">Fallo al conectar con la nueva base de datos. Verifica las políticas de seguridad (RLS) en Supabase.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="color:red; text-align:center;">Error BD: ${error.message}</td></tr>`;
     }
 }
 
@@ -153,28 +175,44 @@ function renderizarTablaProductos(productos) {
     tbody.innerHTML = '';
     productos.forEach(prod => {
         
-        let urlImagen = 'https://raw.githubusercontent.com/dianiluz/cupissa/main/assets/logo.png';
+        const nombreReal = prod.producto || 'Sin Nombre';
+        const safeRef = String(prod.ref).replace(/['"]/g, '');
+        const safeNom = String(nombreReal).replace(/['"]/g, '');
+
+        let urlImagen = `https://raw.githubusercontent.com/${CUPISSA_CONFIG.github.owner}/${CUPISSA_CONFIG.github.repo}/${CUPISSA_CONFIG.github.branch}/assets/productos/${safeRef}/${safeRef}.jpg`;
+
         if (prod.imagenes_data) {
             try {
                 let imgs = typeof prod.imagenes_data === 'string' ? JSON.parse(prod.imagenes_data) : prod.imagenes_data;
-                if (Array.isArray(imgs) && imgs.length > 0 && imgs[0].url) {
-                    let rawUrl = imgs[0].url;
-                    urlImagen = rawUrl.startsWith('http') ? rawUrl : `https://raw.githubusercontent.com/${CUPISSA_CONFIG.github.owner}/${CUPISSA_CONFIG.github.repo}/${CUPISSA_CONFIG.github.branch}/${rawUrl}`;
+                // Soporte inteligente para formato nuevo (Array) y antiguo (Objeto con "principal")
+                if (Array.isArray(imgs) && imgs.length > 0 && imgs[0].url && imgs[0].url !== 'cascada') {
+                    let rawUrl = String(imgs[0].url);
+                    urlImagen = rawUrl.startsWith('http') ? rawUrl : `https://raw.githubusercontent.com/${CUPISSA_CONFIG.github.owner}/${CUPISSA_CONFIG.github.repo}/${CUPISSA_CONFIG.github.branch}/${rawUrl.replace(/^\//, '')}`;
+                } else if (imgs && !Array.isArray(imgs) && typeof imgs === 'object') {
+                    let rawUrl = String(imgs.principal || Object.values(imgs)[0] || '');
+                    if (rawUrl && rawUrl !== 'undefined') {
+                        urlImagen = rawUrl.startsWith('http') ? rawUrl : `https://raw.githubusercontent.com/${CUPISSA_CONFIG.github.owner}/${CUPISSA_CONFIG.github.repo}/${CUPISSA_CONFIG.github.branch}/${rawUrl.replace(/^\//, '')}`;
+                    }
                 }
-            } catch(e) { console.warn("Error leyendo JSON de imágenes para", prod.ref); }
+            } catch(e) {}
         }
         
-        const precioReal = prod.precio_base !== undefined && prod.precio_base !== null ? prod.precio_base : 0;
-        const nombreReal = prod.producto || 'Sin Nombre';
+        const precioReal = prod.precio_base || 0;
+        const estadoTexto = prod.activo !== false ? 'SI' : 'NO';
+        const claseEstado = prod.activo !== false ? 'estado-activo' : 'estado-inactivo';
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td><img src="${urlImagen}" style="width:50px; height:50px; object-fit:cover; border-radius:4px;" onerror="this.src='https://raw.githubusercontent.com/dianiluz/cupissa/main/assets/logo.png'"></td>
+            <td>
+                <img src="${urlImagen}" 
+                     style="width:50px; height:50px; object-fit:cover; border-radius:4px;" 
+                     onerror="window.manejarErrorImagen(this, '${safeRef}', '${safeNom}')">
+            </td>
             <td><strong>${prod.ref}</strong></td>
             <td>${nombreReal} ${prod.x_temp === 'X' ? '⭐' : ''}</td>
             <td><span style="font-size:12px;">${prod.mundo || ''} <br> <small style="color:#db137a;">${prod.categoria || ''}</small></span></td>
             <td>$${Number(precioReal).toLocaleString()}</td>
-            <td><span class="semaforo-estado ${prod.activo === 'SI' ? 'estado-activo' : 'estado-inactivo'}">${prod.activo || 'SI'}</span></td>
+            <td><span class="semaforo-estado ${claseEstado}">${estadoTexto}</span></td>
             <td>
                 <div style="display:flex; flex-direction:column; gap:5px;">
                     <button class="btn-accion btn-editar" onclick="window.editarProducto('${prod.ref}')">Editar</button>
@@ -187,7 +225,7 @@ function renderizarTablaProductos(productos) {
 }
 
 window.eliminarProducto = async (ref) => {
-    if (confirm(`¿Estás 100% segura de que deseas ELIMINAR el producto ${ref}? Esta acción no se puede deshacer.`)) {
+    if (confirm(`¿Estás segura de ELIMINAR la ref ${ref}? Esta acción es irreversible.`)) {
         try {
             const { error } = await window.supabase.from('productos').delete().eq('ref', ref);
             if (error) throw error;
@@ -210,25 +248,48 @@ window.abrirModalProducto = function(productoEdicion = null) {
 
     const esEdicion = productoEdicion !== null;
     const refCalculada = esEdicion ? productoEdicion.ref : generarSiguienteReferencia();
-    
     const nombreProd = productoEdicion ? (productoEdicion.producto || '') : '';
     const precioProd = productoEdicion ? (productoEdicion.precio_base || 0) : 0;
     
     window.imagenesListTemp = [];
     if (productoEdicion && productoEdicion.imagenes_data) {
         try {
-            window.imagenesListTemp = typeof productoEdicion.imagenes_data === 'string' ? JSON.parse(productoEdicion.imagenes_data) : productoEdicion.imagenes_data;
-        } catch(e) { window.imagenesListTemp = []; }
+            const arr = typeof productoEdicion.imagenes_data === 'string' ? JSON.parse(productoEdicion.imagenes_data) : productoEdicion.imagenes_data;
+            if (Array.isArray(arr)) {
+                window.imagenesListTemp = arr;
+            } else if (arr && typeof arr === 'object') {
+                // Si es el formato viejo, lo preparamos visualmente pero protegemos su integridad
+                const rawUrl = String(arr.principal || Object.values(arr)[0] || '');
+                if (rawUrl && rawUrl !== 'undefined') {
+                    window.imagenesListTemp.push({
+                        color: 'Original',
+                        base64: null,
+                        url: rawUrl,
+                        ref: productoEdicion.ref,
+                        nombre: productoEdicion.producto
+                    });
+                }
+            }
+        } catch(e) {}
+    }
+
+    if (esEdicion && window.imagenesListTemp.length === 0) {
+        window.imagenesListTemp.push({
+            color: 'Original (Antigua)',
+            base64: null,
+            url: 'cascada', 
+            ref: productoEdicion.ref,
+            nombre: productoEdicion.producto
+        });
     }
 
     let tallasProd = productoEdicion ? (productoEdicion.tallas || '') : '';
     const tallasProdLimpio = tallasProd.startsWith('#') ? tallasProd.substring(1) : tallasProd;
-    
     const modalidadProd = productoEdicion ? (productoEdicion.modalidad || '') : '';
 
     let seleccionadasIds = [];
     if (productoEdicion && productoEdicion.variaciones_ids) {
-        seleccionadasIds = typeof productoEdicion.variaciones_ids === 'string' ? productoEdicion.variaciones_ids.split(',') : productoEdicion.variaciones_ids;
+        seleccionadasIds = typeof productoEdicion.variaciones_ids === 'string' ? productoEdicion.variaciones_ids.split(',') : [String(productoEdicion.variaciones_ids)];
     }
 
     let checkListHtml = '';
@@ -237,13 +298,11 @@ window.abrirModalProducto = function(productoEdicion = null) {
         let aplicaAuto = false;
         if (esEdicion) aplicaAuto = window.productoCumpleCondicion(productoEdicion, v.columna, v.valor);
         
-        const isChecked = seleccionadasIds.includes(idVar) || aplicaAuto;
-        const checked = isChecked ? 'checked' : '';
-        
+        const isChecked = (seleccionadasIds.includes(idVar) || aplicaAuto) ? 'checked' : '';
         checkListHtml += `
             <label style="display:flex; align-items:center; gap:8px; padding:6px; border-bottom:1px solid #f0f0f0; font-size:12px; cursor:pointer;">
-                <input type="checkbox" class="check-var" value="${idVar}" ${checked}>
-                <span>${(v.columna||'').substring(0,20)} > <b>${(v.valor||'').substring(0,20)}</b> <span style="color:#db137a">(+$${Number(v.incremento).toLocaleString()})</span></span>
+                <input type="checkbox" class="check-var" value="${idVar}" ${isChecked}>
+                <span>${(v.columna||'')} > <b>${(v.valor||'')}</b> <span style="color:#db137a">(+$${Number(v.incremento).toLocaleString()})</span></span>
             </label>
         `;
     });
@@ -255,15 +314,20 @@ window.abrirModalProducto = function(productoEdicion = null) {
                 <h2 style="color:#db137a; font-family:'Bree Serif';">Editor Cupissa: ${refCalculada}</h2>
                 
                 <div id="div-crear-producto" class="form-grid">
-                    
-                    <div class="form-group"><label>Ref (Auto-Carpetas Activo)</label><input type="text" id="prod-ref" value="${refCalculada}" readonly style="background:#fdf2f8;"></div>
-                    <div class="form-group"><label>Estado</label><select id="prod-activo"><option value="SI" ${productoEdicion?.activo==='SI'?'selected':''}>SI (Visible)</option><option value="NO" ${productoEdicion?.activo==='NO'?'selected':''}>NO (Oculto)</option></select></div>
-                    <div class="form-group" style="grid-column: 1 / -1;"><label>Nombre del Producto</label><input type="text" id="prod-nombre" value="${nombreProd}" required></div>
+                    <div class="form-group"><label>Ref</label><input type="text" id="prod-ref" value="${refCalculada}" readonly style="background:#fdf2f8;"></div>
+                    <div class="form-group">
+                        <label>Estado</label>
+                        <select id="prod-activo">
+                            <option value="true" ${productoEdicion?.activo !== false ? 'selected' : ''}>SI (Visible)</option>
+                            <option value="false" ${productoEdicion?.activo === false ? 'selected' : ''}>NO (Oculto)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;"><label>Nombre del Producto *</label><input type="text" id="prod-nombre" value="${nombreProd}" required></div>
                     
                     <div class="form-group" style="position:relative;">
                         <label>Mundo</label>
                         <input type="text" id="prod-mundo" value="${productoEdicion?.mundo || ''}" autocomplete="off">
-                        <div id="sugg-mundo" class="suggestions-panel" style="display:none; position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #ccc; max-height:150px; overflow-y:auto; z-index:100; border-radius:0 0 5px 5px;"></div>
+                        <div id="sugg-mundo" class="suggestions-panel" style="display:none; position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #ccc; max-height:150px; overflow-y:auto; z-index:100;"></div>
                     </div>
                     <div class="form-group" style="position:relative;">
                         <label>Categoría</label>
@@ -281,57 +345,53 @@ window.abrirModalProducto = function(productoEdicion = null) {
                         <div id="sugg-tematica" class="suggestions-panel" style="display:none; position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #ccc; max-height:150px; overflow-y:auto; z-index:100;"></div>
                     </div>
 
-                    <div class="form-group"><label>Para Quién (Opcional)</label><input type="text" id="prod-para-quien" value="${productoEdicion?.para_quien || ''}" placeholder="Ej: Niñas, Bebés"></div>
-                    <div class="form-group"><label>Temporada a la que pertenece</label><input type="text" id="prod-temporada" value="${productoEdicion?.temporada || ''}" placeholder="Ej: Verano 2026"></div>
-                    <div class="form-group"><label>Tallas Base (separar con |)</label><input type="text" id="prod-tallas" value="${tallasProdLimpio}" placeholder="Ej: 0-6M|6-12M|2-4"></div>
-                    <div class="form-group"><label>Colores Disponibles (Meta-Tags)</label><input type="text" id="prod-colores" value="${productoEdicion?.colores || ''}" placeholder="Ej: Rojo|Azul|Blanco"></div>
+                    <div class="form-group"><label>Para Quién (Opcional)</label><input type="text" id="prod-para-quien" value="${productoEdicion?.para_quien || ''}"></div>
+                    <div class="form-group"><label>Temporada a la que pertenece</label><input type="text" id="prod-temporada" value="${productoEdicion?.temporada || ''}"></div>
+                    <div class="form-group"><label>Tallas Base (separar con |)</label><input type="text" id="prod-tallas" value="${tallasProdLimpio}"></div>
+                    <div class="form-group"><label>Colores (Meta-Tags)</label><input type="text" id="prod-colores" value="${productoEdicion?.colores || ''}"></div>
 
                     <div class="form-group" style="grid-column: 1 / -1; display:flex; gap:15px; align-items:center;">
                         <div>
                             <label>Modalidad</label>
-                            <div style="display:flex; gap:15px; padding-top:5px; align-items:center;">
-                                <label style="display:flex; align-items:center; gap:5px; font-weight:normal; cursor:pointer;"><input type="checkbox" id="check-compra" style="width:auto;"> Compra</label>
-                                <label style="display:flex; align-items:center; gap:5px; font-weight:normal; cursor:pointer;"><input type="checkbox" id="check-alquiler" style="width:auto;"> Alquiler</label>
+                            <div style="display:flex; gap:15px; padding-top:5px;">
+                                <label style="cursor:pointer;"><input type="checkbox" id="check-compra" style="width:auto;"> Compra</label>
+                                <label style="cursor:pointer;"><input type="checkbox" id="check-alquiler" style="width:auto;"> Alquiler</label>
                             </div>
                         </div>
                         <div style="flex:1;">
-                            <label>Destacar en Página de Inicio (X-Temp)</label>
+                            <label>Página de Inicio (X-Temp)</label>
                             <div style="padding-top:5px;">
-                                <label style="display:flex; align-items:center; gap:5px; font-weight:bold; cursor:pointer; color:#db137a;">
-                                    <input type="checkbox" id="prod-x-temp" ${productoEdicion?.x_temp === 'X' ? 'checked' : ''} style="width:18px; height:18px;">
-                                    ⭐ Activo (Marcar con X)
+                                <label style="color:#db137a; font-weight:bold; cursor:pointer;">
+                                    <input type="checkbox" id="prod-x-temp" ${productoEdicion?.x_temp === 'X' ? 'checked' : ''} style="width:18px; height:18px;"> ⭐ Activo
                                 </label>
                             </div>
                         </div>
                         <div style="flex:1;">
-                            <label style="color:#10b981; font-weight:bold;">Precio Base Oficial</label>
+                            <label style="color:#10b981; font-weight:bold;">Precio Base *</label>
                             <input type="number" id="prod-precio" value="${precioProd}" style="border-color:#10b981; font-size:16px;">
                         </div>
                     </div>
 
                     <div class="form-group" style="grid-column: 1 / -1; background:#fdf2f8; padding:15px; border-radius:10px; border:2px dashed #db137a;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                            <label style="color:#db137a; font-weight:bold; font-size:16px;">📸 Galería de Colores</label>
-                            <span style="font-size:11px; color:#666;">Las fotos se guardarán auto en: assets/productos/${refCalculada}/</span>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                            <label style="color:#db137a; font-weight:bold;">📸 Galería de Colores</label>
+                            <span style="font-size:11px; color:#666;">Guardado inteligente SEO</span>
                         </div>
-                        
-                        <div id="galeria-preview" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom: 15px;">
-                            </div>
-
-                        <div style="display:flex; gap:10px; align-items:center; background:#fff; padding:10px; border-radius:8px;">
-                            <input type="text" id="img-color-input" placeholder="Escribe el color de la foto (Ej: Rojo, Defecto)" style="flex:1; border:1px solid #ccc;">
+                        <div id="galeria-preview" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom: 15px;"></div>
+                        <div style="display:flex; gap:10px; background:#fff; padding:10px; border-radius:8px;">
+                            <input type="text" id="img-color-input" placeholder="Color de la foto (Ej: Rojo)" style="flex:1;">
                             <button type="button" id="btn-activar-camara" class="btn-secundario" style="margin:0;">Buscar Imagen a Recortar</button>
                             <input type="file" id="file-input-multi" accept="image/*" style="display:none;">
                         </div>
                     </div>
 
-                    <div style="grid-column: 1 / -1; display:grid; grid-template-columns: 1fr 1fr; gap:20px; border:1px solid #db137a; padding:15px; border-radius:10px; background:white;">
+                    <div style="grid-column: 1 / -1; display:grid; grid-template-columns: 1fr 1fr; gap:20px; border:1px solid #db137a; padding:15px; border-radius:10px;">
                         <div>
-                            <label style="color:#db137a; font-weight:bold;">+ Nueva Regla de Variación</label>
-                            <input type="text" id="m-col" placeholder="Columnas (ej: CATEGORIA, TALLA)" style="width:100%; margin-bottom:5px;">
-                            <input type="text" id="m-val" placeholder="Valores (ej: NIÑAS, 6-8)" style="width:100%; margin-bottom:5px;">
-                            <input type="number" id="m-inc" placeholder="Incremento en $" style="width:100%; margin-bottom:10px;">
-                            <button type="button" id="btn-manual-add" class="btn-primario" style="width:100%;">Añadir Variación a Base de Datos</button>
+                            <label style="color:#db137a; font-weight:bold;">+ Nueva Variación Global</label>
+                            <input type="text" id="m-col" placeholder="Columnas (ej: CATEGORIA)" style="width:100%; margin-bottom:5px;">
+                            <input type="text" id="m-val" placeholder="Valores (ej: NIÑAS)" style="width:100%; margin-bottom:5px;">
+                            <input type="number" id="m-inc" placeholder="Incremento $" style="width:100%; margin-bottom:10px;">
+                            <button type="button" id="btn-manual-add" class="btn-primario" style="width:100%;">Añadir a BD</button>
                         </div>
                         <div>
                             <label style="color:#db137a; font-weight:bold;">Variaciones Aplicadas</label>
@@ -343,7 +403,7 @@ window.abrirModalProducto = function(productoEdicion = null) {
 
                     <div class="modal-actions" style="grid-column: 1 / -1; text-align:right;">
                         <button type="button" id="btn-cerrar-modal" class="btn-secundario">Cancelar</button>
-                        <button type="button" id="btn-submit-prod" class="btn-primario">GUARDAR PRODUCTO COMPLETO</button>
+                        <button type="button" id="btn-submit-prod" class="btn-primario">GUARDAR PRODUCTO</button>
                     </div>
                 </div>
             </div>
@@ -351,10 +411,12 @@ window.abrirModalProducto = function(productoEdicion = null) {
 
         <div class="crop-container" id="crop-container" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:500000; justify-content:center; align-items:center;">
             <div style="background:white; padding:20px; border-radius:10px; max-width:600px; width:90%;">
-                <div style="height:400px; background:#eee; overflow:hidden; display:flex; justify-content:center; align-items:center;"><img id="image-to-crop" style="max-width:100%; max-height:100%;"></div>
+                <div style="height:400px; background:#eee; overflow:hidden; display:flex; justify-content:center; align-items:center;">
+                    <img id="image-to-crop" style="max-width:100%; max-height:100%;">
+                </div>
                 <div style="margin-top:15px; text-align:right;">
-                    <button id="btn-cancel-crop" class="btn-secundario">Cancelar</button>
-                    <button id="btn-do-crop" class="btn-primario">Aplicar Recorte y Adjuntar</button>
+                    <button type="button" id="btn-cancel-crop" class="btn-secundario">Cancelar</button>
+                    <button type="button" id="btn-do-crop" class="btn-primario">Aplicar Recorte y Adjuntar</button>
                 </div>
             </div>
         </div>
@@ -362,192 +424,80 @@ window.abrirModalProducto = function(productoEdicion = null) {
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 
-    document.getElementById('btn-x').onclick = () => document.getElementById('modal-producto').remove();
-    document.getElementById('btn-cerrar-modal').onclick = () => document.getElementById('modal-producto').remove();
-
-    if (esEdicion && modalidadProd) {
-        if (modalidadProd.includes('COMPRA')) document.getElementById('check-compra').checked = true;
-        if (modalidadProd.includes('ALQUILER')) document.getElementById('check-alquiler').checked = true;
-    }
-
-    // --- LÓGICA DE AUTOCOMPLETADO RÁPIDO ---
-    const configAutocompletado = [
-        { inputId: 'prod-mundo', suggId: 'sugg-mundo', columna: 'mundo' },
-        { inputId: 'prod-categoria', suggId: 'sugg-categoria', columna: 'categoria' },
-        { inputId: 'prod-sub', suggId: 'sugg-sub', columna: 'subcategoria' },
-        { inputId: 'prod-tematica', suggId: 'sugg-tematica', columna: 'tematica' }
-    ];
-
-    configAutocompletado.forEach(cfg => {
-        const input = document.getElementById(cfg.inputId);
-        const panel = document.getElementById(cfg.suggId);
-        if (!input || !panel) return;
-
-        const valoresExistentes = [...new Set(window.productosGlobales
-            .map(p => p[cfg.columna]) 
-            .filter(v => v && v.trim() !== '' && !v.startsWith('#')) 
-            .map(v => v.trim())
-        )].sort();
-
-        input.addEventListener('input', function() {
-            const val = this.value.trim().toLowerCase();
-            panel.innerHTML = '';
-            if (val.length < 1) { panel.style.display = 'none'; return; }
-            const filtrados = valoresExistentes.filter(v => v.toLowerCase().includes(val));
-            if (filtrados.length > 0) {
-                filtrados.forEach(v => {
-                    const div = document.createElement('div');
-                    div.style.padding = "8px 10px"; div.style.cursor = "pointer"; div.style.borderBottom = "1px solid #eee"; div.style.fontSize = "13px";
-                    div.textContent = v;
-                    div.onclick = function() { input.value = v; panel.style.display = 'none'; };
-                    div.onmouseover = function() { this.style.background = "#fdf2f8"; };
-                    div.onmouseout = function() { this.style.background = "white"; };
-                    panel.appendChild(div);
-                });
-                panel.style.display = 'block';
-            } else { panel.style.display = 'none'; }
-        });
-        document.addEventListener('click', function(e) { if (e.target !== input) panel.style.display = 'none'; });
-    });
-
-    // --- MOTOR DE GALERÍA MÚLTIPLE ---
-    const btnActivarCam = document.getElementById('btn-activar-camara');
-    const fileInputMulti = document.getElementById('file-input-multi');
-    const cropContainer = document.getElementById('crop-container');
-    const imageToCrop = document.getElementById('image-to-crop');
-    let cropper = null;
-
-    btnActivarCam.onclick = () => {
-        if (!document.getElementById('img-color-input').value.trim()) {
-            window.mostrarToast("Escribe un color antes de subir la foto.", "error"); return;
-        }
-        fileInputMulti.click();
-    };
-
-    fileInputMulti.onchange = (ev) => {
-        const file = ev.target.files[0];
-        if(!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            imageToCrop.src = e.target.result;
-            cropContainer.style.display = 'flex';
-            if(cropper) cropper.destroy();
-            cropper = new Cropper(imageToCrop, { viewMode: 1 });
-        };
-        reader.readAsDataURL(file);
-    };
-
-    window.renderizarGaleriaTemp = function() {
-        const gal = document.getElementById('galeria-preview');
-        gal.innerHTML = '';
-        if (window.imagenesListTemp.length === 0) {
-            gal.innerHTML = `<span style="font-size:12px; color:#888;">No hay imágenes cargadas.</span>`; return;
-        }
-        window.imagenesListTemp.forEach((img, idx) => {
-            let srcRender = img.base64 ? `data:image/jpeg;base64,${img.base64}` : (img.url.startsWith('http') ? img.url : `https://raw.githubusercontent.com/${CUPISSA_CONFIG.github.owner}/${CUPISSA_CONFIG.github.repo}/${CUPISSA_CONFIG.github.branch}/${img.url}`);
-            const card = document.createElement('div');
-            card.style = "position:relative; width:80px; height:80px; border-radius:8px; border:1px solid #ccc; overflow:hidden;";
-            card.innerHTML = `
-                <img src="${srcRender}" style="width:100%; height:100%; object-fit:cover;">
-                <div style="position:absolute; bottom:0; left:0; width:100%; background:rgba(0,0,0,0.6); color:white; font-size:10px; text-align:center; padding:2px;">${img.color}</div>
-                <button type="button" style="position:absolute; top:2px; right:2px; background:red; color:white; border:none; border-radius:50%; width:20px; height:20px; cursor:pointer; font-weight:bold; font-size:10px;" onclick="window.imagenesListTemp.splice(${idx}, 1); window.renderizarGaleriaTemp();">X</button>
-            `;
-            gal.appendChild(card);
-        });
-    };
-
-    document.getElementById('btn-do-crop').onclick = (e) => {
+    const btnGuardar = document.getElementById('btn-submit-prod');
+    btnGuardar.addEventListener('click', async (e) => {
         e.preventDefault();
-        const colorDesignado = document.getElementById('img-color-input').value.trim() || 'Defecto';
-        const canvas = cropper.getCroppedCanvas({ maxWidth: 1000, maxHeight: 1000 });
-        const b64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-        
-        window.imagenesListTemp.push({ color: colorDesignado, base64: b64, url: '' });
-        window.renderizarGaleriaTemp();
-        document.getElementById('img-color-input').value = '';
-        
-        cropContainer.style.display = 'none';
-        cropper.destroy();
-    };
-
-    document.getElementById('btn-cancel-crop').onclick = (e) => {
-        e.preventDefault(); cropContainer.style.display = 'none'; if(cropper) cropper.destroy(); fileInputMulti.value = '';
-    };
-    
-    window.renderizarGaleriaTemp();
-
-    // --- GUARDAR VARIACIÓN MANUAL (NUEVA LÓGICA CORREGIDA) ---
-    document.getElementById('btn-manual-add').onclick = async () => {
-        const c = document.getElementById('m-col').value;
-        const v = document.getElementById('m-val').value;
-        const i = document.getElementById('m-inc').value;
-        
-        if(c && v && i) {
-            const nuevaVar = { columna: c.toUpperCase(), valor: v.toUpperCase(), incremento: Number(i) };
-            
-            // Usamos .select() para que Supabase nos devuelva el ID de la fila recién creada
-            const { data, error } = await window.supabase.from("variaciones").insert([nuevaVar]).select();
-            
-            if (error) { 
-                window.mostrarToast("Error de permisos BD: " + error.message, "error"); 
-            } else { 
-                window.mostrarToast("Variación guardada y aplicada al producto.", "exito"); 
-                
-                // Limpiamos los campos
-                document.getElementById('m-col').value = "";
-                document.getElementById('m-val').value = "";
-                document.getElementById('m-inc').value = "";
-
-                // Inyectamos la nueva variación en el checklist inmediatamente
-                if (data && data.length > 0) {
-                    const nuevaReglaBD = data[0];
-                    window.variacionesGlobales.push(nuevaReglaBD); // La guardamos en memoria
-                    
-                    const idVar = String(nuevaReglaBD.id);
-                    const labelHtml = `
-                        <label style="display:flex; align-items:center; gap:8px; padding:6px; border-bottom:1px solid #f0f0f0; font-size:12px; cursor:pointer; background:#fdf2f8;">
-                            <input type="checkbox" class="check-var" value="${idVar}" checked>
-                            <span>${(nuevaReglaBD.columna||'').substring(0,20)} > <b>${(nuevaReglaBD.valor||'').substring(0,20)}</b> <span style="color:#db137a">(+$${Number(nuevaReglaBD.incremento).toLocaleString()})</span></span>
-                        </label>
-                    `;
-                    document.getElementById('container-checks').insertAdjacentHTML('beforeend', labelHtml);
-                }
-            }
-        } else { 
-            window.mostrarToast("Llena los 3 campos de la variación.", "error"); 
-        }
-    };
-
-    // --- GUARDAR PRODUCTO OFICIAL ---
-    document.getElementById('btn-submit-prod').onclick = async (e) => {
-        e.preventDefault();
-        const btn = document.getElementById('btn-submit-prod');
-        btn.disabled = true; btn.textContent = "Procesando Imágenes y Guardando...";
-
         try {
-            let imagenesFinales = [];
-            for (let idx = 0; idx < window.imagenesListTemp.length; idx++) {
-                let img = window.imagenesListTemp[idx];
-                if (img.base64) {
-                    let colorLimpio = img.color.toLowerCase().replace(/[^a-z0-9]/g, '');
-                    let fileNamePath = `${refCalculada}/${refCalculada}_${colorLimpio}_${Date.now()}.jpg`; 
-                    
-                    const res = await fetch(CUPISSA_CONFIG.API_URL, {
-                        method: 'POST',
-                        body: JSON.stringify({ action: 'subirFotoGithub', nombre_archivo: fileNamePath, base64: img.base64 })
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        imagenesFinales.push({ color: img.color, url: data.url }); 
-                    } else {
-                        throw new Error("GitHub rechazó la foto: " + data.error);
-                    }
-                } else {
-                    imagenesFinales.push({ color: img.color, url: img.url });
+            const nombreVal = document.getElementById('prod-nombre').value.trim();
+            if (!nombreVal) throw new Error("Debes escribir el Nombre del Producto.");
+
+            btnGuardar.disabled = true; 
+            btnGuardar.textContent = "Procesando...";
+
+            let nombreValFormateado = nombreVal.toLowerCase().replace(/['"]/g, '').replace(/\s+/g, '-');
+            
+            // --- PROTECCIÓN DE DATOS INTELIGENTE ---
+            let imagenesModificadas = false;
+
+            // Verificamos si hay alguna foto nueva (tiene base64)
+            if (window.imagenesListTemp.some(img => img.base64)) {
+                imagenesModificadas = true;
+            } else {
+                // Contamos las fotos que el usuario dejó en el editor (excluyendo la cascada falsa)
+                const fotosEnEditor = window.imagenesListTemp.filter(img => img.url !== 'cascada').length;
+                let fotosEnBD = 0;
+                
+                if (productoEdicion && productoEdicion.imagenes_data) {
+                    const arr = typeof productoEdicion.imagenes_data === 'string' ? JSON.parse(productoEdicion.imagenes_data) : productoEdicion.imagenes_data;
+                    if (Array.isArray(arr)) fotosEnBD = arr.length;
+                    else if (arr && typeof arr === 'object') fotosEnBD = 1;
+                }
+                // Si la cantidad no coincide, significa que el usuario borró alguna usando la "X"
+                if (fotosEnEditor !== fotosEnBD) {
+                    imagenesModificadas = true;
                 }
             }
 
-            const idsSeleccionados = Array.from(document.querySelectorAll('.check-var:checked')).map(cb => cb.value);
+            let dataImagenesAGuardar = null;
+
+            if (imagenesModificadas) {
+                let imagenesFinales = [];
+                for (let idx = 0; idx < window.imagenesListTemp.length; idx++) {
+                    let img = window.imagenesListTemp[idx];
+                    
+                    if (img.base64) {
+                        let colorLimpio = (img.color || 'defecto').toLowerCase().replace(/['"]/g, '').replace(/\s+/g, '-');
+                        let fileNamePath = `${refCalculada}/${nombreValFormateado}-${refCalculada}-${colorLimpio}.jpg`; 
+                        
+                        const res = await fetch(CUPISSA_CONFIG.API_URL, {
+                            method: 'POST',
+                            body: JSON.stringify({ action: 'subirFotoGithub', nombre_archivo: fileNamePath, base64: img.base64 })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            imagenesFinales.push({ color: img.color, url: data.url }); 
+                        } else {
+                            throw new Error("GitHub rechazó la foto: " + data.error);
+                        }
+                    } else if (img.url !== 'cascada') {
+                        imagenesFinales.push({ color: img.color, url: img.url });
+                    }
+                }
+                dataImagenesAGuardar = imagenesFinales.length > 0 ? JSON.stringify(imagenesFinales) : null;
+            } else {
+                // MAGIA: El usuario no tocó las fotos. Reinyectamos el valor exacto y literal que tenía en Supabase
+                dataImagenesAGuardar = esEdicion ? productoEdicion.imagenes_data : null;
+            }
+            // ----------------------------------------
+
+            let variacionesSeleccionadas = [];
+            const checkboxes = document.querySelectorAll('.check-var');
+            for (let i = 0; i < checkboxes.length; i++) {
+                if (checkboxes[i].checked) {
+                    variacionesSeleccionadas.push(String(checkboxes[i].value).trim());
+                }
+            }
+            const strVariaciones = variacionesSeleccionadas.length > 0 ? variacionesSeleccionadas.join(',') : "";
 
             const checkCompra = document.getElementById('check-compra').checked;
             const checkAlquiler = document.getElementById('check-alquiler').checked;
@@ -560,9 +510,8 @@ window.abrirModalProducto = function(productoEdicion = null) {
             if (tallasGuardar !== '' && !tallasGuardar.startsWith('#')) { tallasGuardar = '#' + tallasGuardar; }
 
             const dataToSave = {
-                ref: refCalculada,
-                activo: document.getElementById('prod-activo').value,
-                producto: document.getElementById('prod-nombre').value,
+                activo: document.getElementById('prod-activo').value === 'true',
+                producto: nombreVal,
                 mundo: document.getElementById('prod-mundo').value,
                 categoria: document.getElementById('prod-categoria').value,
                 subcategoria: document.getElementById('prod-sub').value,
@@ -574,24 +523,229 @@ window.abrirModalProducto = function(productoEdicion = null) {
                 temporada: document.getElementById('prod-temporada').value,
                 x_temp: document.getElementById('prod-x-temp').checked ? 'X' : '',
                 precio_base: Number(document.getElementById('prod-precio').value) || 0,
-                variaciones_ids: idsSeleccionados.join(','), 
-                imagenes_data: JSON.stringify(imagenesFinales)
+                variaciones_ids: strVariaciones, 
+                // Enviamos los datos protegidos
+                imagenes_data: dataImagenesAGuardar
             };
 
-            if (!esEdicion) { dataToSave.fecha_creacion = new Date().toISOString(); }
+            let dbError = null;
 
-            const { error } = await window.supabase.from("productos").upsert(dataToSave, { onConflict: 'ref' });
-            if (error) throw error;
+            if (esEdicion) {
+                const { error } = await window.supabase.from("productos").update(dataToSave).eq('ref', refCalculada);
+                dbError = error;
+            } else {
+                dataToSave.ref = refCalculada;
+                dataToSave.fecha_creacion = new Date().toISOString();
+                const { error } = await window.supabase.from("productos").insert([dataToSave]);
+                dbError = error;
+            }
 
-            window.mostrarToast("¡Producto Guardado con Éxito en DB y GitHub!", "exito");
+            if (dbError) throw dbError;
+
+            window.mostrarToast("¡Producto Guardado con Éxito!", "exito");
             document.getElementById('modal-producto').remove();
-            cargarProductos();
+            cargarProductos(); 
 
         } catch (error) {
-            console.error("Error Guardado Complejo:", error);
-            window.mostrarToast("Fallo: " + (error.message || "Error Desconocido"), "error");
-            btn.disabled = false; btn.textContent = "GUARDAR PRODUCTO COMPLETO";
+            console.error(error);
+            window.mostrarToast(error.message, "error");
+            btnGuardar.disabled = false; 
+            btnGuardar.textContent = "GUARDAR PRODUCTO";
         }
+    });
+
+    document.getElementById('btn-x').onclick = () => document.getElementById('modal-producto').remove();
+    document.getElementById('btn-cerrar-modal').onclick = () => document.getElementById('modal-producto').remove();
+
+    if (esEdicion && modalidadProd) {
+        if (modalidadProd.includes('COMPRA')) document.getElementById('check-compra').checked = true;
+        if (modalidadProd.includes('ALQUILER')) document.getElementById('check-alquiler').checked = true;
+    }
+
+    const configAutocompletado = [
+        { inputId: 'prod-mundo', suggId: 'sugg-mundo', columna: 'mundo' },
+        { inputId: 'prod-categoria', suggId: 'sugg-categoria', columna: 'categoria' },
+        { inputId: 'prod-sub', suggId: 'sugg-sub', columna: 'subcategoria' },
+        { inputId: 'prod-tematica', suggId: 'sugg-tematica', columna: 'tematica' }
+    ];
+
+    configAutocompletado.forEach(cfg => {
+        const input = document.getElementById(cfg.inputId);
+        const panel = document.getElementById(cfg.suggId);
+        if (!input || !panel) return;
+        const valoresExistentes = [...new Set(window.productosGlobales.map(p => p[cfg.columna]).filter(v => v && v.trim() !== '' && !v.startsWith('#')).map(v => v.trim()))].sort();
+        input.addEventListener('input', function() {
+            const val = this.value.trim().toLowerCase();
+            panel.innerHTML = '';
+            if (val.length < 1) { panel.style.display = 'none'; return; }
+            const filtrados = valoresExistentes.filter(v => v.toLowerCase().includes(val));
+            if (filtrados.length > 0) {
+                filtrados.forEach(v => {
+                    const div = document.createElement('div');
+                    div.style.padding = "8px 10px"; div.style.cursor = "pointer"; div.style.borderBottom = "1px solid #eee"; div.style.fontSize = "13px";
+                    div.textContent = v;
+                    div.onclick = function() { input.value = v; panel.style.display = 'none'; };
+                    panel.appendChild(div);
+                });
+                panel.style.display = 'block';
+            } else { panel.style.display = 'none'; }
+        });
+        document.addEventListener('click', function(e) { if (e.target !== input) panel.style.display = 'none'; });
+    });
+
+    const fileInputMulti = document.getElementById('file-input-multi');
+    const cropContainer = document.getElementById('crop-container');
+    const imageToCrop = document.getElementById('image-to-crop');
+    let cropper = null;
+
+    document.getElementById('btn-activar-camara').onclick = () => {
+        const colorInput = document.getElementById('img-color-input').value.trim();
+        if (!colorInput) {
+            window.mostrarToast("⚠️ Escribe el nombre del color ANTES de buscar la foto.", "error");
+            document.getElementById('img-color-input').focus();
+            return;
+        }
+        fileInputMulti.click();
+    };
+
+    fileInputMulti.onchange = (ev) => {
+        const colorInput = document.getElementById('img-color-input').value.trim();
+        if (!colorInput) {
+            window.mostrarToast("⚠️ Escribe el nombre del color.", "error");
+            ev.target.value = '';
+            return;
+        }
+        const file = ev.target.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        
+        imageToCrop.onload = () => {
+            cropContainer.style.display = 'flex';
+            if(cropper) cropper.destroy();
+            cropper = new Cropper(imageToCrop, { viewMode: 1 });
+        };
+        
+        reader.onload = (e) => {
+            imageToCrop.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+
+    document.getElementById('btn-do-crop').addEventListener('click', (e) => {
+        e.preventDefault();
+        try {
+            const colorDesignado = document.getElementById('img-color-input').value.trim();
+            if (!colorDesignado) throw new Error("⚠️ El color es obligatorio.");
+            if (!cropper) throw new Error("La herramienta de recorte no está lista.");
+            
+            const canvas = cropper.getCroppedCanvas({ maxWidth: 1000, maxHeight: 1000 });
+            if (!canvas) throw new Error("No se pudo generar el recorte.");
+            
+            const b64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+            
+            window.imagenesListTemp.push({ color: colorDesignado, base64: b64, url: '' });
+            window.renderizarGaleriaTemp();
+            
+            document.getElementById('img-color-input').value = '';
+            cropContainer.style.display = 'none';
+            cropper.destroy();
+            cropper = null;
+        } catch (err) {
+            window.mostrarToast(err.message, "error");
+        }
+    });
+
+    document.getElementById('btn-cancel-crop').onclick = (e) => {
+        e.preventDefault(); 
+        cropContainer.style.display = 'none'; 
+        if(cropper) cropper.destroy(); 
+        cropper = null;
+        fileInputMulti.value = '';
+    };
+
+    window.renderizarGaleriaTemp = function() {
+        const gal = document.getElementById('galeria-preview');
+        if (!gal) return;
+        gal.innerHTML = '';
+        
+        if (!window.imagenesListTemp || window.imagenesListTemp.length === 0) {
+            gal.innerHTML = `<span style="font-size:12px; color:#888;">Sube las fotos por color.</span>`; 
+            return;
+        }
+
+        window.imagenesListTemp.forEach((img, idx) => {
+            try {
+                let imgHtml = '';
+                const safeRefImg = String(img.ref || refCalculada).replace(/['"]/g, '');
+                const safeNomImg = String(img.nombre || document.getElementById('prod-nombre').value).replace(/['"]/g, '');
+
+                if (img.base64) {
+                    imgHtml = `<img src="data:image/jpeg;base64,${img.base64}" style="width:100%; height:100%; object-fit:cover;">`;
+                } else {
+                    let startUrl = `https://raw.githubusercontent.com/${CUPISSA_CONFIG.github.owner}/${CUPISSA_CONFIG.github.repo}/${CUPISSA_CONFIG.github.branch}/assets/productos/${safeRefImg}/${safeRefImg}.jpg`;
+                    
+                    if (img.url && img.url !== 'cascada') {
+                        startUrl = img.url.startsWith('http') ? img.url : `https://raw.githubusercontent.com/${CUPISSA_CONFIG.github.owner}/${CUPISSA_CONFIG.github.repo}/${CUPISSA_CONFIG.github.branch}/${img.url.replace(/^\//, '')}`;
+                    }
+                    imgHtml = `<img src="${startUrl}" onerror="window.manejarErrorImagen(this, '${safeRefImg}', '${safeNomImg}')" style="width:100%; height:100%; object-fit:cover;">`;
+                }
+                
+                const card = document.createElement('div');
+                card.style = "position:relative; width:80px; height:80px; border-radius:8px; border:1px solid #ccc; overflow:hidden;";
+                card.innerHTML = `
+                    ${imgHtml}
+                    <div style="position:absolute; bottom:0; left:0; width:100%; background:rgba(0,0,0,0.6); color:white; font-size:10px; text-align:center; padding:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${img.color || 'Defecto'}</div>
+                    <button type="button" style="position:absolute; top:2px; right:2px; background:red; color:white; border:none; border-radius:50%; width:20px; height:20px; cursor:pointer; font-weight:bold; font-size:10px;" onclick="window.imagenesListTemp.splice(${idx}, 1); window.renderizarGaleriaTemp();">X</button>
+                `;
+                gal.appendChild(card);
+            } catch(e) {}
+        });
+    };
+    
+    window.renderizarGaleriaTemp();
+
+    document.getElementById('btn-manual-add').onclick = async () => {
+        const c = document.getElementById('m-col').value.trim();
+        const v = document.getElementById('m-val').value.trim();
+        const i = document.getElementById('m-inc').value.trim();
+        
+        if(c && v && i) {
+            const colMayus = c.toUpperCase();
+            const valMayus = v.toUpperCase();
+            const incNum = Number(i);
+
+            const duplicada = window.variacionesGlobales.find(vg => 
+                String(vg.columna).toUpperCase().replace(/\s+/g, '') === colMayus.replace(/\s+/g, '') && 
+                String(vg.valor).toUpperCase().replace(/\s+/g, '') === valMayus.replace(/\s+/g, '')
+            );
+
+            if (duplicada) {
+                window.mostrarToast(`⚠️ La variación [${colMayus} > ${valMayus}] ya existe. No puedes duplicarla.`, "error");
+                return;
+            }
+
+            const nuevaVar = { columna: colMayus, valor: valMayus, incremento: incNum };
+            
+            const { data, error } = await window.supabase.from("variaciones").insert([nuevaVar]).select();
+            if (error) { window.mostrarToast("Error BD: " + error.message, "error"); } 
+            else { 
+                window.mostrarToast("Variación guardada y aplicada.", "exito"); 
+                document.getElementById('m-col').value = ""; document.getElementById('m-val').value = ""; document.getElementById('m-inc').value = "";
+                
+                if (data && data.length > 0) {
+                    const nuevaReglaBD = data[0];
+                    window.variacionesGlobales.push(nuevaReglaBD); 
+                    const idVar = String(nuevaReglaBD.id);
+                    const labelHtml = `
+                        <label style="display:flex; align-items:center; gap:8px; padding:6px; border-bottom:1px solid #f0f0f0; font-size:12px; cursor:pointer; background:#fdf2f8;">
+                            <input type="checkbox" class="check-var" value="${idVar}" checked>
+                            <span>${(nuevaReglaBD.columna||'')} > <b>${(nuevaReglaBD.valor||'')}</b> <span style="color:#db137a">(+$${Number(nuevaReglaBD.incremento).toLocaleString()})</span></span>
+                        </label>
+                    `;
+                    document.getElementById('container-checks').insertAdjacentHTML('beforeend', labelHtml);
+                }
+            }
+        } else { window.mostrarToast("Llena los 3 campos de la variación.", "error"); }
     };
 };
 

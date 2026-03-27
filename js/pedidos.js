@@ -65,7 +65,6 @@ window.obtenerImagenProducto = function(prod) {
     return urlImagen;
 };
 
-// --- MOTOR ESTRICTO DE MÚLTIPLES CONDICIONES ---
 window.productoCumpleReglaExacta = function(prodEstado, regla) {
     if (!regla.columna || !regla.valor) return true; 
 
@@ -300,73 +299,29 @@ window.aplicarProductoAFila = function(tr, m) {
     thumb.onerror = function() { window.manejarErrorImagen(this, safeRef, safeNom); };
     thumb.style.display = 'block';
     
-    let idsAplicables = m.variaciones_ids ? String(m.variaciones_ids).split(',') : [];
-    let reglasAplicables = [];
-
-    if (window.variacionesGlobales && m.ref !== 'CUSTOM') {
-        window.variacionesGlobales.forEach(vg => {
-            if (idsAplicables.includes(String(vg.id)) || window.productoCumpleReglaExacta(m, vg)) {
-                reglasAplicables.push(vg);
-            }
-        });
-    }
-
-    let reglasTalla = reglasAplicables.filter(vg => String(vg.columna).toLowerCase().includes('talla'));
-    let reglasColor = reglasAplicables.filter(vg => String(vg.columna).toLowerCase().includes('color'));
-    let reglasBaseExtra = reglasAplicables.filter(vg => !String(vg.columna).toLowerCase().includes('talla') && !String(vg.columna).toLowerCase().includes('color'));
-
-    let varBaseInc = 0;
-    let varBaseNames = [];
-    reglasBaseExtra.forEach(vg => {
-        varBaseInc += Number(vg.incremento || 0);
-        const partesValor = vg.valor ? vg.valor.split(/[,|]/) : [''];
-        varBaseNames.push(partesValor[partesValor.length - 1].trim());
-    });
-
-    tr.setAttribute('data-base-inc', varBaseInc);
-    let infoBaseHtml = varBaseNames.length > 0 ? `<div style="font-size:10px; color:#db137a; font-weight:bold; margin-bottom:5px;">Aplica Auto: ${varBaseNames.join(', ')} (+$${varBaseInc.toLocaleString('es-CO')})</div>` : '';
-
     let opcHtml = '';
     
     const tallas = m.tallas ? m.tallas.replace('#', '').split(/[,|]/).map(t => t.trim()).filter(t => t) : [];
     if (tallas.length > 0) {
-        opcHtml += `<div style="margin-bottom:5px;"><label style="font-size:10px; font-weight:bold;">Talla / Edad:</label><select class="prod-talla-sel calc-trigger" style="width:100%; padding:4px; font-size:11px; border:1px solid #ccc; border-radius:3px;"><option value="0" data-name="">Seleccionar...</option>`;
-        tallas.forEach(t => {
-            let incTalla = 0;
-            let tempProd = { ...m, tallas: t }; 
-            reglasTalla.forEach(vg => {
-                if (window.productoCumpleReglaExacta(tempProd, vg)) incTalla += Number(vg.incremento || 0);
-            });
-            let textOpt = incTalla > 0 ? `${t} (+$${incTalla.toLocaleString('es-CO')})` : t;
-            opcHtml += `<option value="${incTalla}" data-name="${t}">${textOpt}</option>`;
-        });
-        opcHtml += `</select></div>`;
+        opcHtml += `<div style="margin-bottom:5px;"><label style="font-size:10px; font-weight:bold;">Talla / Edad:</label><select class="prod-talla-sel calc-trigger" style="width:100%; padding:4px; font-size:11px; border:1px solid #ccc; border-radius:3px;"><option value="">Seleccionar Talla...</option>${tallas.map(t => `<option value="${t}">${t}</option>`).join('')}</select></div>`;
     }
 
     const colores = m.colores ? m.colores.replace('#', '').split(/[,|]/).map(c => c.trim()).filter(c => c) : [];
     if (colores.length > 0) {
-        opcHtml += `<div style="margin-bottom:5px;"><label style="font-size:10px; font-weight:bold;">Color:</label><select class="prod-color-sel calc-trigger" style="width:100%; padding:4px; font-size:11px; border:1px solid #ccc; border-radius:3px;"><option value="0" data-name="">Seleccionar...</option>`;
-        colores.forEach(c => {
-            let incColor = 0;
-            let tempProd = { ...m, colores: c };
-            reglasColor.forEach(vg => {
-                if (window.productoCumpleReglaExacta(tempProd, vg)) incColor += Number(vg.incremento || 0);
-            });
-            let textOpt = incColor > 0 ? `${c} (+$${incColor.toLocaleString('es-CO')})` : c;
-            opcHtml += `<option value="${incColor}" data-name="${c}">${textOpt}</option>`;
-        });
-        opcHtml += `</select></div>`;
+        opcHtml += `<div style="margin-bottom:5px;"><label style="font-size:10px; font-weight:bold;">Color:</label><select class="prod-color-sel calc-trigger" style="width:100%; padding:4px; font-size:11px; border:1px solid #ccc; border-radius:3px;"><option value="">Seleccionar Color...</option>${colores.map(c => `<option value="${c}">${c}</option>`).join('')}</select></div>`;
     }
 
+    let autoVarsInfo = `<div class="var-auto-info" style="margin-top:5px; font-size:11px; color:#888; padding:4px; background:#fdf2f8; border-radius:4px;">Esperando selección...</div>`;
+
     let compHtml = `
-        <div style="margin-top:5px; border-top:1px solid #eee; padding-top:5px;">
+        <div style="margin-top:10px; border-top:1px solid #eee; padding-top:5px;">
             <label style="font-size:10px; font-weight:bold; color:var(--color-primario);">+ Extras Opcionales Libre</label>
             <div class="contenedor-complementos"></div>
-            <button type="button" class="btn-secundario btn-add-comp" style="font-size:10px; padding:4px; margin-top:2px; width:100%;">+ Añadir Complemento</button>
+            <button type="button" class="btn-secundario btn-add-comp" style="font-size:10px; padding:4px; margin-top:2px; width:100%;">+ Añadir Complemento Libre</button>
         </div>
     `;
 
-    tdVariaciones.innerHTML = infoBaseHtml + opcHtml + compHtml;
+    tdVariaciones.innerHTML = opcHtml + autoVarsInfo + compHtml;
     
     const btnAddComp = tdVariaciones.querySelector('.btn-add-comp');
     const contComp = tdVariaciones.querySelector('.contenedor-complementos');
@@ -379,7 +334,7 @@ window.aplicarProductoAFila = function(tr, m) {
             <button type="button" class="btn-eliminar-comp" style="width:10%; color:white; background:red; border:none; border-radius:3px; cursor:pointer; font-weight:bold;">X</button>
         `;
         contComp.appendChild(div);
-        div.querySelector('.btn-eliminar-comp').onclick = () => { div.remove(); if(window.recalcularTotalesGlobal) window.recalcularTotalesGlobal(); };
+        div.querySelector('.btn-eliminar-comp').onclick = () => { div.remove(); window.recalcularTotalesGlobal(); };
         div.querySelector('.comp-precio').addEventListener('input', window.recalcularTotalesGlobal);
     });
 
@@ -388,7 +343,7 @@ window.aplicarProductoAFila = function(tr, m) {
         input.addEventListener('change', window.recalcularTotalesGlobal);
     });
     
-    if (window.recalcularTotalesGlobal) window.recalcularTotalesGlobal();
+    window.recalcularTotalesGlobal();
 };
 
 window.abrirModalCrearPedido = async function() {
@@ -442,7 +397,7 @@ window.abrirModalCrearPedido = async function() {
                             <thead>
                                 <tr>
                                     <th style="width:35%">Ref / Producto</th>
-                                    <th style="width:40%">Tallas, Colores y Extras</th>
+                                    <th style="width:40%">Configuración y Variaciones</th>
                                     <th style="width:10%">Cant.</th>
                                     <th style="width:10%">Precio Base ($)</th>
                                     <th style="width:5%">Acción</th>
@@ -629,20 +584,62 @@ window.abrirModalCrearPedido = async function() {
         let subtotalProd = 0;
         
         tbodyProd.querySelectorAll('tr').forEach(tr => {
+            const ref = tr.querySelector('.prod-ref').value;
             const cant = Number(tr.querySelector('.prod-cant').value) || 0;
             const precioBase = Number(tr.querySelector('.prod-precio').value) || 0;
-            const ref = tr.querySelector('.prod-ref').value;
-            const prodCat = window.productosGlobales.find(p => p.ref === ref) || {};
-
-            let varInc = Number(tr.getAttribute('data-base-inc') || 0);
-
+            
+            const productoBase = window.productosGlobales.find(p => p.ref === ref) || {};
             const tallaSel = tr.querySelector('.prod-talla-sel');
-            if (tallaSel && tallaSel.value) varInc += Number(tallaSel.value);
-
             const colorSel = tr.querySelector('.prod-color-sel');
-            if (colorSel && colorSel.value) varInc += Number(colorSel.value);
+            
+            let tallaElegida = tallaSel ? tallaSel.value : '';
+            let colorElegido = colorSel ? colorSel.value : '';
+
+            let estadoActual = { ...productoBase };
+            if (tallaElegida) estadoActual.tallas = tallaElegida; 
+            if (colorElegido) estadoActual.colores = colorElegido; 
+
+            let varInc = 0;
+            let nombresAplicados = [];
+            let idsAplicables = productoBase.variaciones_ids ? String(productoBase.variaciones_ids).split(',') : [];
+
+            if (window.variacionesGlobales && ref !== 'CUSTOM') {
+                window.variacionesGlobales.forEach(vg => {
+                    const forzadoPorId = idsAplicables.includes(String(vg.id));
+                    const cumpleReglas = window.productoCumpleReglaExacta(estadoActual, vg);
+
+                    let aplica = false;
+                    if (cumpleReglas) {
+                        aplica = true; 
+                    } else if (forzadoPorId) {
+                        let contradice = false;
+                        const cols = String(vg.columna).toLowerCase();
+                        if (cols.includes('talla') && tallaElegida && !String(vg.valor).toUpperCase().includes(tallaElegida.toUpperCase())) contradice = true;
+                        if (cols.includes('color') && colorElegido && !String(vg.valor).toUpperCase().includes(colorElegido.toUpperCase())) contradice = true;
+                        if (!contradice) aplica = true;
+                    }
+
+                    if (aplica) {
+                        varInc += Number(vg.incremento || 0);
+                        const partesValor = vg.valor ? vg.valor.split(/[,|]/) : [''];
+                        nombresAplicados.push(`${partesValor[partesValor.length - 1].trim()} (+$${Number(vg.incremento).toLocaleString('es-CO')})`);
+                    }
+                });
+            }
 
             tr.querySelectorAll('.comp-precio').forEach(inp => { varInc += (Number(inp.value) || 0); });
+
+            const infoDiv = tr.querySelector('.var-auto-info');
+            if (infoDiv) {
+                if (nombresAplicados.length > 0) {
+                    infoDiv.innerHTML = `<span style="color:#db137a; font-weight:bold;">Aplicado: ${nombresAplicados.join(', ')}</span>`;
+                } else {
+                    infoDiv.innerHTML = `<span style="color:#888;">Sin incrementos extra por catálogo.</span>`;
+                }
+            }
+
+            tr.setAttribute('data-var-inc', varInc);
+            tr.setAttribute('data-var-names', nombresAplicados.join(', '));
 
             subtotalProd += (cant * (precioBase + varInc));
         });
@@ -775,29 +772,21 @@ window.abrirModalCrearPedido = async function() {
             let nombreExtendido = tr.querySelector('.prod-nombre').value;
             const precioBase = Number(tr.querySelector('.prod-precio').value) || 0;
 
-            let varInc = Number(tr.getAttribute('data-base-inc') || 0);
-            let extras = [];
-            
-            let baseVars = tr.getAttribute('data-base-vars');
-            if (baseVars) extras.push(baseVars);
-
             const tallaSel = tr.querySelector('.prod-talla-sel');
-            if(tallaSel && tallaSel.selectedIndex > 0) {
-                let txt = tallaSel.options[tallaSel.selectedIndex].getAttribute('data-name');
-                nombreExtendido += ` [Talla: ${txt}]`;
-                varInc += Number(tallaSel.value);
-            }
+            if(tallaSel && tallaSel.value) nombreExtendido += ` [Talla: ${tallaSel.value}]`;
             
             const colorSel = tr.querySelector('.prod-color-sel');
-            if(colorSel && colorSel.selectedIndex > 0) {
-                let txt = colorSel.options[colorSel.selectedIndex].getAttribute('data-name');
-                nombreExtendido += ` [Color: ${txt}]`;
-                varInc += Number(colorSel.value);
-            }
+            if(colorSel && colorSel.value) nombreExtendido += ` [Color: ${colorSel.value}]`;
+
+            let varInc = Number(tr.getAttribute('data-var-inc')) || 0;
+            let varNamesStr = tr.getAttribute('data-var-names') || '';
+            
+            let extras = [];
+            if (varNamesStr) extras.push(varNamesStr);
 
             tr.querySelectorAll('.comp-nombre').forEach((inp, idx) => {
-                const cName = inp.value.trim(); const cPrice = Number(tr.querySelectorAll('.comp-precio')[idx].value) || 0;
-                if(cName) { extras.push(`${cName}`); varInc += cPrice; }
+                const cName = inp.value.trim(); 
+                if(cName) extras.push(`${cName}`);
             });
 
             if(extras.length > 0) nombreExtendido += ` [+ ${extras.join(', ')}]`;
@@ -817,18 +806,16 @@ window.abrirModalCrearPedido = async function() {
 
         const idPed = "CUP-" + Date.now().toString().slice(-8);
         let idClienteFinal = document.getElementById('erp-id-cliente').value;
-        const esClienteNuevo = !idClienteFinal; 
-        const emailCliente = document.getElementById('erp-email').value || `cliente_${idPed}@cupissa.com`;
-        const nombreCliente = document.getElementById('erp-nombre').value;
-        const ccVal = document.getElementById('erp-cc').value.replace(/\D/g, '');
 
         if (document.getElementById('erp-guardar-cliente').checked) {
+            const ccVal = document.getElementById('erp-cc').value.replace(/\D/g, '');
             const telVal = document.getElementById('erp-telefono').value.replace(/\D/g, '');
+            const emailVal = document.getElementById('erp-email').value || `cliente_${idPed}@cupissa.com`;
             
             const { data: clienteDB, error: cliErr } = await window.supabase.from('clientes').upsert({
                 id_cliente: idClienteFinal || undefined, 
-                email: emailCliente,
-                nombre: nombreCliente,
+                email: emailVal,
+                nombre: document.getElementById('erp-nombre').value,
                 cc: ccVal ? parseInt(ccVal) : null,
                 telefono: telVal ? parseInt(telVal) : null,
                 ciudad: document.getElementById('erp-ciudad').value,
@@ -875,14 +862,14 @@ window.abrirModalCrearPedido = async function() {
 
             // --- LLAMADA A APPS SCRIPT PARA CORREOS Y AUTH ---
             try {
-                if (document.getElementById('erp-guardar-cliente').checked && esClienteNuevo && document.getElementById('erp-email').value) {
-                    const claveTemp = ccVal ? `Cupi${ccVal}` : `Cupissa${Date.now().toString().slice(-4)}*`;
+                if (document.getElementById('erp-guardar-cliente').checked && !idClienteFinal) {
+                    const claveTemp = `Cupissa${Date.now().toString().slice(-4)}*`;
                     fetch(CUPISSA_CONFIG.API_URL, {
                         method: 'POST',
                         body: JSON.stringify({
                             action: 'crearUsuarioAuthYBienvenida',
-                            email: emailCliente,
-                            nombre: nombreCliente,
+                            email: document.getElementById('erp-email').value,
+                            nombre: document.getElementById('erp-nombre').value,
                             clave_temporal: claveTemp
                         })
                     });
@@ -892,11 +879,11 @@ window.abrirModalCrearPedido = async function() {
                     body: JSON.stringify({
                         action: 'enviarCorreoConfirmacion',
                         pedido: { idpedido: idPed, total: pedData.total, valor_anticipo: pedData.valor_anticipo, saldo_pendiente: pedData.saldo_pendiente },
-                        usuario: { nombre: nombreCliente, email: emailCliente },
+                        usuario: { nombre: document.getElementById('erp-nombre').value, email: document.getElementById('erp-email').value },
                         productos: prodsAInsertar.map(p => ({ producto: p.detalles_personalizacion, cantidad: p.cantidad, precio: p.precio_unitario }))
                     })
                 });
-            } catch (errMails) { console.log("Aviso: Fallo enviando correos", errMails); }
+            } catch (errMails) {}
             // ------------------------------------------------
 
             window.mostrarToast("Pedido ERP creado con éxito.", "exito");
@@ -986,10 +973,11 @@ window.abrirModalGestionPedido = async function(idPedido) {
                             </div>
                             <div><label style="font-size:12px; font-weight:600;">Transportadora</label><input type="text" id="gestion-transportadora" value="${pedido.transportadora || ''}" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;"></div>
                             <div><label style="font-size:12px; font-weight:600;">Guía</label><input type="number" id="gestion-guia" value="${pedido.guia || ''}" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;"></div>
+                            
                             <div style="background: rgba(219,19,122,0.1); padding: 8px; border-radius: 4px; border: 1px solid rgba(219,19,122,0.3); margin-top:5px;">
                                 <label style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:bold; color:var(--color-primario); cursor:pointer;">
                                     <input type="checkbox" id="gestion-aplica-cupicoins" ${pedido.aplica_cupicoins !== false ? 'checked' : ''} ${pedido.cupicoins_otorgados ? 'disabled' : ''}> 
-                                    ${pedido.cupicoins_otorgados ? '✅ CupiCoins ya otorgados' : 'Otorgar CupiCoins al Entregar'}
+                                    ${pedido.cupicoins_otorgados ? '✅ CupiCoins ya otorgados' : 'Otorgar CupiCoins al Entregar (Si aplica)'}
                                 </label>
                             </div>
                             <div class="modal-actions" style="margin-top:10px;"><button type="submit" class="btn-primario" style="width:100%;">Guardar Cambios</button></div>
@@ -1043,14 +1031,20 @@ window.abrirModalGestionPedido = async function(idPedido) {
                 if (cli && cli.id_cliente) {
                     const { data: histo } = await window.supabase.from('cupicoins_historial').select('*').eq('id_cliente', cli.id_cliente).eq('motivo', `Pedido ${pedido.id_pedido}`);
                     if (!histo || histo.length === 0) {
-                        const pts = Math.floor(Number(pedido.total || 0) / 1000) * 5;
+                        // CÁLCULO EXCLUSIVO SOBRE PRODUCTOS (Sin flete)
+                        let subtotalProd = 0;
+                        prodsDB.forEach(p => subtotalProd += (Number(p.precio_unitario || 0) * Number(p.cantidad || 1)));
+                        
+                        const pts = Math.floor(subtotalProd / 1000) * 5;
                         if (pts > 0) {
                             const saldo = Number(cli.cupicoins_totales || 0);
                             await window.supabase.from('clientes').update({ cupicoins_totales: saldo + pts }).eq('id_cliente', cli.id_cliente);
                             await window.supabase.from('cupicoins_historial').insert([{ id_cliente: cli.id_cliente, movimiento: pts, motivo: `Pedido ${pedido.id_pedido}` }]);
-                            window.mostrarToast(`¡Se otorgaron ${pts} CupiCoins!`, "exito");
+                            window.mostrarToast(`¡Se otorgaron ${pts} CupiCoins (Solo por productos)!`, "exito");
                             payload.cupicoins_otorgados = true; 
                         }
+                    } else {
+                        window.mostrarToast(`CupiCoins ya habían sido otorgados antes.`, "exito");
                     }
                 }
             }
@@ -1070,7 +1064,20 @@ window.generarRemisionPDF = async function(idPedido) {
     const { data: prodsDB } = await window.supabase.from('pedidos_productos').select('*').eq('id_pedido', idPedido);
     
     const { jsPDF } = window.jspdf; const doc = new jsPDF();
-    doc.setFontSize(22); doc.setTextColor(219, 19, 122); doc.text("CUPISSA", 14, 25);
+    let logoBase64 = null;
+    try {
+        logoBase64 = await new Promise((resolve) => {
+            const img = new Image(); img.crossOrigin = "Anonymous"; img.src = "https://raw.githubusercontent.com/dianiluz/cupissa/main/assets/logo.png"; 
+            img.onload = () => {
+                const canvas = document.createElement("canvas"); canvas.width = img.width; canvas.height = img.height;
+                canvas.getContext("2d").drawImage(img, 0, 0); resolve(canvas.toDataURL("image/png"));
+            };
+            img.onerror = () => resolve(null);
+        });
+    } catch (e) { }
+
+    if (logoBase64) doc.addImage(logoBase64, 'PNG', 14, 15, 45, 15);
+    else { doc.setFontSize(22); doc.setTextColor(219, 19, 122); doc.text("CUPISSA", 14, 25); }
     doc.setFontSize(10); doc.setTextColor(100, 100, 100);
     doc.text("CUPISSA SAS | NIT. 901725692", 14, 35);
     doc.text("BARRANQUILLA, ATLÁNTICO", 14, 40); doc.text("+57 314 767 1380 | contacto@cupissa.com", 14, 45);
@@ -1114,4 +1121,5 @@ window.generarRemisionPDF = async function(idPedido) {
     doc.setFont("helvetica", "italic"); doc.setFontSize(9); doc.setTextColor(150, 150, 150);
     doc.text("Documento generado automáticamente por el sistema ERP Cupissa.", 14, 280);
     doc.save(`Remision_CUPISSA_${pedido.id_pedido}.pdf`);
+    window.mostrarToast(`PDF de la Remisión ${pedido.id_pedido} generado.`, "exito");
 };

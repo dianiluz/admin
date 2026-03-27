@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CUPISSA | Panel Admin</title>
+    <title>CUPISSA | ERP Core</title>
     <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/dianiluz/cupissa/main/assets/favicon.png">
 
     <style id="seguridad-cupissa">html { display: none !important; }</style>
@@ -36,14 +36,28 @@
             <div class="logo-container">
                 <img src="https://raw.githubusercontent.com/dianiluz/cupissa/main/assets/logo.png" alt="Cupissa Logo" class="logo">
             </div>
+            
             <nav class="admin-nav" id="main-nav">
-                <button class="nav-btn active" data-target="dashboard">Dashboard</button>
-                <button class="nav-btn" data-target="productos">Productos</button>
-                <button class="nav-btn" data-target="pedidos">Pedidos</button>
-                <button class="nav-btn" data-target="usuarios">Usuarios</button>
-                <button class="nav-btn" data-target="marketing">Marketing</button>
-                <button class="nav-btn" data-target="comisiones">Comisiones</button>
+                <button class="nav-btn active" data-target="dashboard" data-roles="ADMIN,GERENTE">📊 Dashboard</button>
+                
+                <h4 class="nav-category">Comercio</h4>
+                <button class="nav-btn" data-target="pos" data-roles="ADMIN,EMPLEADO">🛒 POS (Venta Rápida)</button>
+                <button class="nav-btn" data-target="pedidos" data-roles="ADMIN,EMPLEADO,LOGISTICA">📦 Pedidos ERP</button>
+                <button class="nav-btn" data-target="productos" data-roles="ADMIN">👗 Catálogo</button>
+                
+                <h4 class="nav-category">Operaciones</h4>
+                <button class="nav-btn" data-target="produccion" data-roles="ADMIN,PRODUCCION,EMPLEADO">✂️ Producción y Taller</button>
+                <button class="nav-btn" data-target="logistica" data-roles="ADMIN,LOGISTICA,EMPLEADO">🚚 Logística y Despachos</button>
+                
+                <h4 class="nav-category">Administración</h4>
+                <button class="nav-btn" data-target="usuarios" data-roles="ADMIN,RRHH">👥 Directorio y RRHH</button>
+                <button class="nav-btn" data-target="contabilidad" data-roles="ADMIN,CONTADOR">💰 Contabilidad y Finanzas</button>
+                
+                <h4 class="nav-category">Crecimiento</h4>
+                <button class="nav-btn" data-target="marketing" data-roles="ADMIN,MARKETING">📈 Marketing y Promos</button>
+                <button class="nav-btn" data-target="comisiones" data-roles="ADMIN,CONTADOR">🤝 Comisiones y UGC</button>
             </nav>
+
             <div class="sidebar-footer">
                 <button id="btn-instalar-pwa" class="btn-secundario" style="display: none; width: 100%; margin-bottom: 10px;">Descargar App</button>
                 <button id="btn-actualizar-app" class="btn-secundario" style="width: 100%; margin-bottom: 10px; color: var(--color-primario); border-color: var(--color-primario);">↻ Actualizar App</button>
@@ -71,12 +85,18 @@
 
     <script src="js/config.js"></script>
     <script src="js/utils.js"></script> 
-    <script src="js/panel-admin.js"></script>
-    <script src="js/dashboard.js"></script>
-    <script src="js/productos.js"></script>
+    
+    <script src="js/dashboard.js"></script> <script src="js/productos.js"></script>
     <script src="js/pedidos.js"></script>
     <script src="js/usuarios.js"></script>
     <script src="js/marketing.js"></script>
-    <script src="js/comisiones.js"></script>
+    
+    <script src="js/roles/pos.js"></script>
+    <script src="js/roles/contabilidad.js"></script>
+    <script src="js/roles/produccion.js"></script>
+    <script src="js/roles/logistica.js"></script>
+    <script src="js/roles/comisiones.js"></script>
+
+    <script src="js/panel-admin.js"></script>
 </body>
 </html>

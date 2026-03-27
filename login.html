@@ -4,11 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Acceso | Panel Admin CUPISSA</title>
-    <link rel="icon" type="image/png" href="https://cupissa.com/assets/favicon.png">
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/dianiluz/cupissa/main/assets/favicon.png">
     
     <link href="https://fonts.googleapis.com/css2?family=Bree+Serif&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/variables.css">
-    <link rel="manifest" href="/manifest.json">
+    
+    <link rel="manifest" href="manifest.json">
     
     <script>
         // Redirección rápida si YA está logueado
@@ -58,7 +59,7 @@
 <body>
 
     <div class="login-wrapper">
-        <img src="https://raw.githubusercontent.com/dianiluz/cupissa/main/assets/logo.png" alt="Cupissa Logo" style="width: 150px; margin-bottom: 20px;">
+        <img src="https://raw.githubusercontent.com/dianiluz/cupissa/main/assets/logo.png" alt="Cupissa Logo">
         <h2>Acceso Restringido</h2>
         <p>Panel de Administración y ERP</p>
         
@@ -75,29 +76,24 @@
             <div id="login-error"></div>
         </form>
 
-        <button type="button" id="btn-instalar-login" class="btn-descarga">⬇️ Descargar App Panel Admin</button>
+        <button type="button" id="btn-instalar-login" class="btn-descarga">⬇️ Instalar App Panel Admin</button>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
     <script src="js/config.js"></script>
-
     <script>
-    // USAR window.supabase para asegurar que llamamos a la librería cargada en el CDN
-    const supabase = window.supabase.createClient(CUPISSA_CONFIG.supabase.url, CUPISSA_CONFIG.supabase.key);
-</script>
-
+        const supabase = window.supabase.createClient(CUPISSA_CONFIG.supabase.url, CUPISSA_CONFIG.supabase.key);
+    </script>
     <script src="js/login.js"></script>
 
     <script>
-        // Service Worker para PWA
+        // Registro del Service Worker (Ruta corregida)
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').catch(err => console.warn('SW no cargado', err));
+                navigator.serviceWorker.register('./sw.js').catch(err => console.warn('SW no cargado', err));
             });
         }
 
-        // Lógica de instalación PWA
         let deferredPromptLogin = null;
         const btnInstalarLogin = document.getElementById('btn-instalar-login');
 
@@ -115,7 +111,7 @@
                         deferredPromptLogin = null;
                     }
                 } else {
-                    alert("📱 Para instalar en celular:\n\n1. Toca el ícono de 'Compartir' o el menú de tres puntos de tu navegador.\n2. Selecciona 'Agregar a la pantalla de inicio' o 'Instalar aplicación'.");
+                    alert("📱 Para instalar en celular:\n\n1. Toca el menú de tres puntos de tu navegador.\n2. Selecciona 'Instalar aplicación' o 'Agregar a la pantalla de inicio'.\n\nSi ya ves el ícono de Cupissa en tu menú de apps, ¡ya está instalada!");
                 }
             });
         }

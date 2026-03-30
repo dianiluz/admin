@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnMenuMobile = document.getElementById('btn-menu-mobile');
     const mobileOverlay = document.getElementById('mobile-overlay');
 
-    // SEGURIDAD RBAC (Oculta botones no autorizados)
+    // SEGURIDAD RBAC (Oculta botones no autorizados - Solo ADMIN entra aquí por ahora)
     navButtons.forEach(btn => {
         const rolesPermitidos = (btn.getAttribute('data-roles') || 'ADMIN').split(',');
         if (!rolesPermitidos.includes(usuarioActual.rol) && usuarioActual.rol !== 'ADMIN') {
@@ -53,26 +53,26 @@ document.addEventListener('DOMContentLoaded', () => {
         mobileOverlay.onclick = () => { sidebar.classList.remove('open'); mobileOverlay.classList.remove('active'); };
     }
 
+    // MAPA DE MÓDULOS MODO DIOS (NÚCLEO)
     const modules = {
-        dashboard: () => typeof window.renderDashboard === 'function' ? window.renderDashboard() : renderPlaceholder('Dashboard'),
-        pos: () => typeof window.renderPOS === 'function' ? window.renderPOS() : renderPlaceholder('POS'),
-        pedidos: () => typeof window.renderPedidos === 'function' ? window.renderPedidos() : renderPlaceholder('Pedidos'),
-        productos: () => typeof window.renderProductos === 'function' ? window.renderProductos() : renderPlaceholder('Productos'),
-        produccion: () => typeof window.renderProduccion === 'function' ? window.renderProduccion() : renderPlaceholder('Producción'),
-        logistica: () => typeof window.renderLogistica === 'function' ? window.renderLogistica() : renderPlaceholder('Logística'),
-        usuarios: () => typeof window.renderUsuarios === 'function' ? window.renderUsuarios() : renderPlaceholder('Usuarios / RRHH'),
-        contabilidad: () => typeof window.renderContabilidad === 'function' ? window.renderContabilidad() : renderPlaceholder('Contabilidad'),
-        marketing: () => typeof window.renderMarketing === 'function' ? window.renderMarketing() : renderPlaceholder('Marketing'),
-        comisiones: () => typeof window.renderComisiones === 'function' ? window.renderComisiones() : renderPlaceholder('Comisiones')
+        dashboard: () => typeof window.renderDashboard === 'function' ? window.renderDashboard() : renderPlaceholder('Dashboard Principal'),
+        pedidos: () => typeof window.renderPedidos === 'function' ? window.renderPedidos() : renderPlaceholder('Gestión de Pedidos y Ventas'),
+        productos: () => typeof window.renderProductos === 'function' ? window.renderProductos() : renderPlaceholder('Catálogo y Variaciones'),
+        inventario: () => typeof window.renderInventario === 'function' ? window.renderInventario() : renderPlaceholder('Inventario y Bodega (Auditoría)'),
+        logistica: () => typeof window.renderLogistica === 'function' ? window.renderLogistica() : renderPlaceholder('Logística y Despachos'),
+        usuarios: () => typeof window.renderUsuarios === 'function' ? window.renderUsuarios() : renderPlaceholder('Directorio y Equipo'),
+        finanzas: () => typeof window.renderAuditoriaFinanzas === 'function' ? window.renderAuditoriaFinanzas() : renderPlaceholder('Auditoría Financiera y Cajas'),
+        marketing: () => typeof window.renderMarketing === 'function' ? window.renderMarketing() : renderPlaceholder('Marketing y Descuentos'),
+        comisiones: () => typeof window.renderComisiones === 'function' ? window.renderComisiones() : renderPlaceholder('Comisiones UGC')
     };
 
     function renderPlaceholder(nombre) {
         const dynamicContent = document.getElementById('dynamic-content');
         if (dynamicContent) {
             dynamicContent.innerHTML = `
-                <div class="card" style="text-align:center; padding: 50px 20px;">
+                <div class="card" style="text-align:center; padding: 50px 20px; border-top: 4px solid var(--color-primario);">
                     <h2 style="color:var(--color-primario); font-family:'Bree Serif'; margin-bottom:10px;">Módulo: ${nombre}</h2>
-                    <p style="color:var(--color-texto-suave);">Estamos construyendo este módulo. Pronto estará disponible en tu panel.</p>
+                    <p style="color:var(--color-texto-suave);">Sección en construcción o archivo JS no enlazado.</p>
                 </div>`;
         }
     }
@@ -95,7 +95,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Cargar el primer botón visible automáticamente
     const primerBotonVisible = Array.from(navButtons).find(b => b.style.display !== 'none');
     if (primerBotonVisible) primerBotonVisible.click();
 });
@@ -112,7 +111,7 @@ if ('serviceWorker' in navigator) {
                 const newWorker = reg.installing;
                 newWorker.addEventListener('statechange', () => {
                     if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        if (confirm("✨ ¡Nueva versión del ERP disponible! ¿Actualizar ahora?")) {
+                        if (confirm("✨ ¡Nueva versión de Cupissa ERP disponible! ¿Actualizar ahora?")) {
                             newWorker.postMessage('SKIP_WAITING');
                         }
                     }
@@ -125,7 +124,7 @@ if ('serviceWorker' in navigator) {
 const btnActualizar = document.getElementById('btn-actualizar-app');
 if (btnActualizar) {
     btnActualizar.addEventListener('click', () => {
-        btnActualizar.textContent = "Limpiando caché...";
+        btnActualizar.textContent = "Limpiando...";
         if ('caches' in window) caches.keys().then(names => { for (let name of names) caches.delete(name); });
         setTimeout(() => window.location.reload(true), 1000);
     });

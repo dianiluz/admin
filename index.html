@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CUPISSA | ERP Core</title>
+    <title>CUPISSA | Admin Pro</title>
     <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/dianiluz/cupissa/main/assets/favicon.png">
 
     <style id="seguridad-cupissa">html { display: none !important; }</style>
@@ -38,24 +38,23 @@
             </div>
             
             <nav class="admin-nav" id="main-nav">
-                <button class="nav-btn active" data-target="dashboard" data-roles="ADMIN,GERENTE">📊 Dashboard</button>
+                <button class="nav-btn active" data-target="dashboard" data-roles="ADMIN">📊 Dashboard Global</button>
                 
                 <h4 class="nav-category">Comercio</h4>
-                <button class="nav-btn" data-target="pos" data-roles="ADMIN,EMPLEADO">🛒 POS (Venta Rápida)</button>
-                <button class="nav-btn" data-target="pedidos" data-roles="ADMIN,EMPLEADO,LOGISTICA">📦 Pedidos ERP</button>
-                <button class="nav-btn" data-target="productos" data-roles="ADMIN">👗 Catálogo</button>
+                <button class="nav-btn" data-target="pedidos" data-roles="ADMIN">📦 Pedidos y Ventas</button>
+                <button class="nav-btn" data-target="productos" data-roles="ADMIN">👗 Catálogo y Precios</button>
                 
                 <h4 class="nav-category">Operaciones</h4>
-                <button class="nav-btn" data-target="produccion" data-roles="ADMIN,PRODUCCION,EMPLEADO">✂️ Producción y Taller</button>
-                <button class="nav-btn" data-target="logistica" data-roles="ADMIN,LOGISTICA,EMPLEADO">🚚 Logística y Despachos</button>
+                <button class="nav-btn" data-target="inventario" data-roles="ADMIN">📦 Inventario y Bodega</button>
+                <button class="nav-btn" data-target="logistica" data-roles="ADMIN">🚚 Logística y Despachos</button>
                 
-                <h4 class="nav-category">Administración</h4>
-                <button class="nav-btn" data-target="usuarios" data-roles="ADMIN,RRHH">👥 Directorio y RRHH</button>
-                <button class="nav-btn" data-target="contabilidad" data-roles="ADMIN,CONTADOR">💰 Contabilidad y Finanzas</button>
+                <h4 class="nav-category">Auditoría y Control</h4>
+                <button class="nav-btn" data-target="usuarios" data-roles="ADMIN">👥 Directorio y RRHH</button>
+                <button class="nav-btn" data-target="finanzas" data-roles="ADMIN">💰 Auditoría Financiera</button>
                 
                 <h4 class="nav-category">Crecimiento</h4>
-                <button class="nav-btn" data-target="marketing" data-roles="ADMIN,MARKETING">📈 Marketing y Promos</button>
-                <button class="nav-btn" data-target="comisiones" data-roles="ADMIN,CONTADOR">🤝 Comisiones y UGC</button>
+                <button class="nav-btn" data-target="marketing" data-roles="ADMIN">📈 Marketing y Promos</button>
+                <button class="nav-btn" data-target="comisiones" data-roles="ADMIN">🤝 Comisiones y UGC</button>
             </nav>
 
             <div class="sidebar-footer">
@@ -69,12 +68,12 @@
             <header class="top-bar">
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <button id="btn-menu-mobile" class="hamburger-btn">☰</button>
-                    <h1 id="section-title">Dashboard</h1>
+                    <h1 id="section-title">Dashboard Global</h1>
                 </div>
                 <div class="user-info" id="header-user-email">Cargando usuario...</div>
             </header>
-            <div id="dynamic-content" class="module-container">
-                </div>
+            
+            <div id="dynamic-content" class="module-container"></div>
         </main>
     </div>
     
@@ -86,16 +85,14 @@
     <script src="js/config.js"></script>
     <script src="js/utils.js"></script> 
     
-    <script src="js/dashboard.js"></script> <script src="js/productos.js"></script>
+    <script src="js/dashboard.js"></script> 
+    <script src="js/productos.js"></script>
     <script src="js/pedidos.js"></script>
-    <script src="js/usuarios.js"></script>
-    <script src="js/marketing.js"></script>
+    <script src="js/inventario.js"></script> <script src="js/logistica.js"></script>
     
-    <script src="js/roles/pos.js"></script>
-    <script src="js/roles/contabilidad.js"></script>
-    <script src="js/roles/produccion.js"></script>
-    <script src="js/roles/logistica.js"></script>
-    <script src="js/roles/comisiones.js"></script>
+    <script src="js/usuarios.js"></script>
+    <script src="js/auditoria-finanzas.js"></script> <script src="js/marketing.js"></script>
+    <script src="js/comisiones.js"></script>
 
     <script src="js/panel-admin.js"></script>
 </body>

@@ -447,6 +447,7 @@ async function dispararEmailMarketing(e) {
             method: 'POST',
             body: JSON.stringify({
                 action: 'enviarCorreoMarketing',
+                token: CUPISSA_CONFIG.API_TOKEN,
                 destinatarios: destinatarios,
                 asunto: asunto,
                 cuerpo_html: mensajeHtml,

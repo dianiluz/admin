@@ -891,11 +891,11 @@ window.abrirModalCrearPedido = async function() {
                 if (document.getElementById('erp-guardar-cliente').checked && !idClienteFinal) {
                     const claveTemp = `Cupissa${Date.now().toString().slice(-4)}*`;
                     fetch(CUPISSA_CONFIG.API_URL, {
-                        method: 'POST', body: JSON.stringify({ action: 'crearUsuarioAuthYBienvenida', email: document.getElementById('erp-email').value, nombre: nombreClienteFinal, clave_temporal: claveTemp })
+                        method: 'POST', body: JSON.stringify({ action: 'crearUsuarioAuthYBienvenida', token: CUPISSA_CONFIG.API_TOKEN, email: document.getElementById('erp-email').value, nombre: nombreClienteFinal, clave_temporal: claveTemp })
                     });
                 }
                 fetch(CUPISSA_CONFIG.API_URL, {
-                    method: 'POST', body: JSON.stringify({ action: 'enviarCorreoConfirmacion', pedido: { idpedido: idPed, total: pedData.total, valor_anticipo: pedData.valor_anticipo, saldo_pendiente: pedData.saldo_pendiente }, usuario: { nombre: nombreClienteFinal, email: document.getElementById('erp-email').value }, productos: prodsAInsertar.map(p => ({ producto: p.detalles_personalizacion, cantidad: p.cantidad, precio: p.precio_unitario })) })
+                    method: 'POST', body: JSON.stringify({ action: 'enviarCorreoConfirmacion', token: CUPISSA_CONFIG.API_TOKEN, pedido: { idpedido: idPed, total: pedData.total, valor_anticipo: pedData.valor_anticipo, saldo_pendiente: pedData.saldo_pendiente }, usuario: { nombre: nombreClienteFinal, email: document.getElementById('erp-email').value }, productos: prodsAInsertar.map(p => ({ producto: p.detalles_personalizacion, cantidad: p.cantidad, precio: p.precio_unitario })) })
                 });
             } catch (errMails) {}
 

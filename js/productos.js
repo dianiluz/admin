@@ -1,6 +1,21 @@
 window.productosGlobales = [];
 window.variacionesGlobales = [];
 
+// --- CONEXIÓN DIFERIDA (Esperamos a que la librería cargue sin estrellarnos) ---
+let dbAdmin = null;
+
+function inicializarDbAdmin() {
+    if (!dbAdmin && typeof window.supabase !== 'undefined' && typeof CUPISSA_CONFIG !== 'undefined') {
+        if (typeof window.supabase.from === 'function') {
+            dbAdmin = window.supabase;
+        } else if (typeof window.supabase.createClient === 'function') {
+            dbAdmin = window.supabase.createClient(CUPISSA_CONFIG.supabase.url, CUPISSA_CONFIG.supabase.key);
+            window.supabase = dbAdmin;
+        }
+    }
+    return dbAdmin;
+}
+
 // --- PARCHE DE SEGURIDAD PARA TOASTS ---
 window.mostrarToast = function(mensaje, tipo = 'exito') {
     let container = document.getElementById('toast-container');
@@ -24,7 +39,7 @@ window.mostrarToast = function(mensaje, tipo = 'exito') {
 
 // --- MOTOR GLOBAL CASCADA DE IMÁGENES ---
 window.manejarErrorImagen = function(imgElement, ref, nombre) {
-    if (!imgElement) return;
+    if (!imgElement || typeof CUPISSA_CONFIG === 'undefined') return;
     
     let intento = parseInt(imgElement.getAttribute('data-intento') || '0');
     const baseUrl = `https://raw.githubusercontent.com/${CUPISSA_CONFIG.github.owner}/${CUPISSA_CONFIG.github.repo}/${CUPISSA_CONFIG.github.branch}/assets/productos`;
@@ -156,11 +171,14 @@ async function cargarProductos() {
     const tbody = document.getElementById('tabla-productos-body');
     if (!tbody) return;
     try {
-        const { data: prodData, error: errProd } = await window.supabase.from('productos').select('*').order('ref', { ascending: true });
+        const db = inicializarDbAdmin();
+        if (!db) throw new Error("No hay conexión a Supabase activa.");
+        
+        const { data: prodData, error: errProd } = await db.from('productos').select('*').order('ref', { ascending: true });
         if(errProd) throw errProd;
         window.productosGlobales = prodData || [];
         
-        const { data: varData } = await window.supabase.from('variaciones').select('*').order('id', { ascending: true });
+        const { data: varData } = await db.from('variaciones').select('*').order('id', { ascending: true });
         window.variacionesGlobales = varData || [];
 
         renderizarTablaProductos(window.productosGlobales);
@@ -179,19 +197,21 @@ function renderizarTablaProductos(productos) {
         const safeRef = String(prod.ref).replace(/['"]/g, '');
         const safeNom = String(nombreReal).replace(/['"]/g, '');
 
-        let urlImagen = `https://raw.githubusercontent.com/${CUPISSA_CONFIG.github.owner}/${CUPISSA_CONFIG.github.repo}/${CUPISSA_CONFIG.github.branch}/assets/productos/${safeRef}/${safeRef}.jpg`;
+        let urlImagen = `https://raw.githubusercontent.com/dianiluz/cupissa/main/assets/productos/${safeRef}/${safeRef}.jpg`;
+        if(typeof CUPISSA_CONFIG !== 'undefined' && CUPISSA_CONFIG.github) {
+             urlImagen = `https://raw.githubusercontent.com/${CUPISSA_CONFIG.github.owner}/${CUPISSA_CONFIG.github.repo}/${CUPISSA_CONFIG.github.branch}/assets/productos/${safeRef}/${safeRef}.jpg`;
+        }
 
         if (prod.imagenes_data) {
             try {
                 let imgs = typeof prod.imagenes_data === 'string' ? JSON.parse(prod.imagenes_data) : prod.imagenes_data;
-                // Soporte inteligente para formato nuevo (Array) y antiguo (Objeto con "principal")
                 if (Array.isArray(imgs) && imgs.length > 0 && imgs[0].url && imgs[0].url !== 'cascada') {
                     let rawUrl = String(imgs[0].url);
-                    urlImagen = rawUrl.startsWith('http') ? rawUrl : `https://raw.githubusercontent.com/${CUPISSA_CONFIG.github.owner}/${CUPISSA_CONFIG.github.repo}/${CUPISSA_CONFIG.github.branch}/${rawUrl.replace(/^\//, '')}`;
+                    urlImagen = rawUrl.startsWith('http') ? rawUrl : `https://raw.githubusercontent.com/dianiluz/cupissa/main/${rawUrl.replace(/^\//, '')}`;
                 } else if (imgs && !Array.isArray(imgs) && typeof imgs === 'object') {
                     let rawUrl = String(imgs.principal || Object.values(imgs)[0] || '');
                     if (rawUrl && rawUrl !== 'undefined') {
-                        urlImagen = rawUrl.startsWith('http') ? rawUrl : `https://raw.githubusercontent.com/${CUPISSA_CONFIG.github.owner}/${CUPISSA_CONFIG.github.repo}/${CUPISSA_CONFIG.github.branch}/${rawUrl.replace(/^\//, '')}`;
+                        urlImagen = rawUrl.startsWith('http') ? rawUrl : `https://raw.githubusercontent.com/dianiluz/cupissa/main/${rawUrl.replace(/^\//, '')}`;
                     }
                 }
             } catch(e) {}
@@ -227,7 +247,8 @@ function renderizarTablaProductos(productos) {
 window.eliminarProducto = async (ref) => {
     if (confirm(`¿Estás segura de ELIMINAR la ref ${ref}? Esta acción es irreversible.`)) {
         try {
-            const { error } = await window.supabase.from('productos').delete().eq('ref', ref);
+            const db = inicializarDbAdmin();
+            const { error } = await db.from('productos').delete().eq('ref', ref);
             if (error) throw error;
             window.mostrarToast("Producto eliminado del catálogo.", "exito");
             cargarProductos(); 
@@ -258,7 +279,6 @@ window.abrirModalProducto = function(productoEdicion = null) {
             if (Array.isArray(arr)) {
                 window.imagenesListTemp = arr;
             } else if (arr && typeof arr === 'object') {
-                // Si es el formato viejo, lo preparamos visualmente pero protegemos su integridad
                 const rawUrl = String(arr.principal || Object.values(arr)[0] || '');
                 if (rawUrl && rawUrl !== 'undefined') {
                     window.imagenesListTemp.push({
@@ -347,8 +367,21 @@ window.abrirModalProducto = function(productoEdicion = null) {
 
                     <div class="form-group"><label>Para Quién (Opcional)</label><input type="text" id="prod-para-quien" value="${productoEdicion?.para_quien || ''}"></div>
                     <div class="form-group"><label>Temporada a la que pertenece</label><input type="text" id="prod-temporada" value="${productoEdicion?.temporada || ''}"></div>
+                    
+                    <div class="form-group">
+                        <label>¿Es Personalizable?</label>
+                        <select id="prod-personalizable">
+                            <option value="NO" ${productoEdicion?.personalizable === 'NO' ? 'selected' : ''}>NO</option>
+                            <option value="SI" ${productoEdicion?.personalizable === 'SI' ? 'selected' : ''}>SI (Mostrar caja de texto)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Complementos (Separar con |)</label>
+                        <input type="text" id="prod-complementos" value="${productoEdicion?.complementos || ''}" placeholder="Ej: Vincha | Medias de encaje">
+                    </div>
+
                     <div class="form-group"><label>Tallas Base (separar con |)</label><input type="text" id="prod-tallas" value="${tallasProdLimpio}"></div>
-                    <div class="form-group"><label>Colores (Meta-Tags)</label><input type="text" id="prod-colores" value="${productoEdicion?.colores || ''}"></div>
+                    <div class="form-group"><label>Colores (Meta-Tags, separar con |)</label><input type="text" id="prod-colores" value="${productoEdicion?.colores || ''}" placeholder="Ej: Rojo | Blanco"></div>
 
                     <div class="form-group" style="grid-column: 1 / -1; display:flex; gap:15px; align-items:center;">
                         <div>
@@ -435,24 +468,18 @@ window.abrirModalProducto = function(productoEdicion = null) {
             btnGuardar.textContent = "Procesando...";
 
             let nombreValFormateado = nombreVal.toLowerCase().replace(/['"]/g, '').replace(/\s+/g, '-');
-            
-            // --- PROTECCIÓN DE DATOS INTELIGENTE ---
             let imagenesModificadas = false;
 
-            // Verificamos si hay alguna foto nueva (tiene base64)
             if (window.imagenesListTemp.some(img => img.base64)) {
                 imagenesModificadas = true;
             } else {
-                // Contamos las fotos que el usuario dejó en el editor (excluyendo la cascada falsa)
                 const fotosEnEditor = window.imagenesListTemp.filter(img => img.url !== 'cascada').length;
                 let fotosEnBD = 0;
-                
                 if (productoEdicion && productoEdicion.imagenes_data) {
                     const arr = typeof productoEdicion.imagenes_data === 'string' ? JSON.parse(productoEdicion.imagenes_data) : productoEdicion.imagenes_data;
                     if (Array.isArray(arr)) fotosEnBD = arr.length;
                     else if (arr && typeof arr === 'object') fotosEnBD = 1;
                 }
-                // Si la cantidad no coincide, significa que el usuario borró alguna usando la "X"
                 if (fotosEnEditor !== fotosEnBD) {
                     imagenesModificadas = true;
                 }
@@ -464,7 +491,6 @@ window.abrirModalProducto = function(productoEdicion = null) {
                 let imagenesFinales = [];
                 for (let idx = 0; idx < window.imagenesListTemp.length; idx++) {
                     let img = window.imagenesListTemp[idx];
-                    
                     if (img.base64) {
                         let colorLimpio = (img.color || 'defecto').toLowerCase().replace(/['"]/g, '').replace(/\s+/g, '-');
                         let fileNamePath = `${refCalculada}/${nombreValFormateado}-${refCalculada}-${colorLimpio}.jpg`; 
@@ -485,17 +511,13 @@ window.abrirModalProducto = function(productoEdicion = null) {
                 }
                 dataImagenesAGuardar = imagenesFinales.length > 0 ? JSON.stringify(imagenesFinales) : null;
             } else {
-                // MAGIA: El usuario no tocó las fotos. Reinyectamos el valor exacto y literal que tenía en Supabase
                 dataImagenesAGuardar = esEdicion ? productoEdicion.imagenes_data : null;
             }
-            // ----------------------------------------
 
             let variacionesSeleccionadas = [];
             const checkboxes = document.querySelectorAll('.check-var');
             for (let i = 0; i < checkboxes.length; i++) {
-                if (checkboxes[i].checked) {
-                    variacionesSeleccionadas.push(String(checkboxes[i].value).trim());
-                }
+                if (checkboxes[i].checked) variacionesSeleccionadas.push(String(checkboxes[i].value).trim());
             }
             const strVariaciones = variacionesSeleccionadas.length > 0 ? variacionesSeleccionadas.join(',') : "";
 
@@ -524,23 +546,21 @@ window.abrirModalProducto = function(productoEdicion = null) {
                 x_temp: document.getElementById('prod-x-temp').checked ? 'X' : '',
                 precio_base: Number(document.getElementById('prod-precio').value) || 0,
                 variaciones_ids: strVariaciones, 
-                // Enviamos los datos protegidos
+                personalizable: document.getElementById('prod-personalizable').value,
+                complementos: document.getElementById('prod-complementos').value,
                 imagenes_data: dataImagenesAGuardar
             };
 
-            let dbError = null;
-
+            const db = inicializarDbAdmin();
             if (esEdicion) {
-                const { error } = await window.supabase.from("productos").update(dataToSave).eq('ref', refCalculada);
-                dbError = error;
+                const { error } = await db.from("productos").update(dataToSave).eq('ref', refCalculada);
+                if(error) throw error;
             } else {
                 dataToSave.ref = refCalculada;
                 dataToSave.fecha_creacion = new Date().toISOString();
-                const { error } = await window.supabase.from("productos").insert([dataToSave]);
-                dbError = error;
+                const { error } = await db.from("productos").insert([dataToSave]);
+                if(error) throw error;
             }
-
-            if (dbError) throw dbError;
 
             window.mostrarToast("¡Producto Guardado con Éxito!", "exito");
             document.getElementById('modal-producto').remove();
@@ -726,7 +746,8 @@ window.abrirModalProducto = function(productoEdicion = null) {
 
             const nuevaVar = { columna: colMayus, valor: valMayus, incremento: incNum };
             
-            const { data, error } = await window.supabase.from("variaciones").insert([nuevaVar]).select();
+            const db = inicializarDbAdmin();
+            const { data, error } = await db.from("variaciones").insert([nuevaVar]).select();
             if (error) { window.mostrarToast("Error BD: " + error.message, "error"); } 
             else { 
                 window.mostrarToast("Variación guardada y aplicada.", "exito"); 

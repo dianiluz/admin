@@ -1,3 +1,5 @@
+// js/marketing.js
+
 window.promocionesGlobales = [];
 
 window.mostrarToast = function(mensaje, tipo = 'exito') {
@@ -55,15 +57,13 @@ window.renderMarketing = function() {
                     <div class="form-group" style="grid-column: 1 / -1;">
                         <label>Audiencia (Destinatarios de la BD)</label>
                         <select id="mkt-audiencia" required style="font-weight:bold;">
-                            <option value="TODOS">Toda la Base de Datos (Clientes y Equipo Activos)</option>
+                            <option value="TODOS">Toda la Base de Datos (Clientes y Equipo)</option>
                             <optgroup label="Tabla: CLIENTES">
-                                <option value="CLIENTE">Solo Clientes Activos</option>
-                                <option value="EMPRESA">Solo Empresas (Mayoristas) Activas</option>
+                                <option value="CLIENTES_TOTALES">Todos los Clientes Registrados</option>
                             </optgroup>
                             <optgroup label="Tabla: EQUIPO">
-                                <option value="ASESOR">Solo Asesores Activos</option>
-                                <option value="EMPLEADO">Solo Empleados Activos</option>
-                                <option value="ADMIN">Solo Administradores</option>
+                                <option value="ASESOR">Solo Asesores Comerciales</option>
+                                <option value="UGC">Solo Creadores UGC</option>
                             </optgroup>
                             <optgroup label="Búsqueda Manual">
                                 <option value="INDIVIDUAL">👤 Usuario Específico (Buscar individualmente)</option>
@@ -114,7 +114,7 @@ window.renderMarketing = function() {
 
     document.getElementById('btn-crear-promo').addEventListener('click', () => window.abrirModalPromo());
 
-    // LÓGICA DE AUDIENCIA Y BUSCADOR INTELIGENTE EN 2 TABLAS
+    // LÓGICA DE AUDIENCIA Y BUSCADOR INTELIGENTE
     const audienciaSelect = document.getElementById('mkt-audiencia');
     const contInd = document.getElementById('cont-email-individual');
     const buscadorMkt = document.getElementById('mkt-buscador-usuario');
@@ -136,31 +136,36 @@ window.renderMarketing = function() {
         resMkt.innerHTML = ''; hiddenEmailMkt.value = '';
         if (val.length < 3) { resMkt.style.display = 'none'; return; }
 
-        // Búsqueda simultánea en clientes y equipo
-        const { data: cData } = await window.supabase.from('clientes')
-            .select('nombre, email').or(`nombre.ilike.%${val}%,email.ilike.%${val}%`).limit(5);
-        const { data: eData } = await window.supabase.from('equipo')
-            .select('nombre, email').or(`nombre.ilike.%${val}%,email.ilike.%${val}%`).limit(5);
-        
-        const mixData = [...(cData || []), ...(eData || [])];
-        
-        if (mixData.length > 0) {
-            mixData.forEach(m => {
-                const div = document.createElement('div');
-                div.style.padding = '10px'; div.style.cursor = 'pointer'; div.style.borderBottom = '1px solid #eee';
-                div.innerHTML = `<strong style="color:var(--color-primario);">${m.nombre}</strong><br><small>${m.email}</small>`;
-                
-                div.onclick = () => {
-                    buscadorMkt.value = `${m.nombre} (${m.email})`;
-                    hiddenEmailMkt.value = m.email;
-                    resMkt.style.display = 'none';
-                };
-                resMkt.appendChild(div);
-            });
-            resMkt.style.display = 'block';
-        } else {
-            resMkt.innerHTML = `<div style="padding:10px; text-align:center; font-size:12px; color:#888;">No se encontraron resultados</div>`;
-            resMkt.style.display = 'block';
+        try {
+            // Extracción segura sin .or complejo que pueda romper por sintaxis
+            const { data: cData } = await window.supabase.from('clientes').select('nombre, email');
+            const { data: eData } = await window.supabase.from('equipo').select('nombre, email');
+            
+            const mixData = [...(cData || []), ...(eData || [])].filter(u => 
+                (u.nombre && u.nombre.toLowerCase().includes(val)) || 
+                (u.email && u.email.toLowerCase().includes(val))
+            ).slice(0, 8);
+            
+            if (mixData.length > 0) {
+                mixData.forEach(m => {
+                    const div = document.createElement('div');
+                    div.style.padding = '10px'; div.style.cursor = 'pointer'; div.style.borderBottom = '1px solid #eee';
+                    div.innerHTML = `<strong style="color:var(--color-primario);">${m.nombre || 'Sin Nombre'}</strong><br><small>${m.email}</small>`;
+                    
+                    div.onclick = () => {
+                        buscadorMkt.value = `${m.nombre || 'Usuario'} (${m.email})`;
+                        hiddenEmailMkt.value = m.email;
+                        resMkt.style.display = 'none';
+                    };
+                    resMkt.appendChild(div);
+                });
+                resMkt.style.display = 'block';
+            } else {
+                resMkt.innerHTML = `<div style="padding:10px; text-align:center; font-size:12px; color:#888;">No se encontraron resultados</div>`;
+                resMkt.style.display = 'block';
+            }
+        } catch (err) {
+            console.error(err);
         }
     });
 
@@ -176,6 +181,7 @@ window.renderMarketing = function() {
 async function cargarPromociones() {
     const tbody = document.getElementById('tabla-promos-body');
     try {
+        // REVERTIMOS A TU CÓDIGO ORIGINAL DE ORDENAMIENTO (id_promo)
         const { data, error } = await window.supabase.from('promociones').select('*').order('id_promo', { ascending: true });
         if (error) throw error;
 
@@ -183,7 +189,7 @@ async function cargarPromociones() {
         renderizarTablaPromociones(window.promocionesGlobales);
     } catch (e) {
         console.error(e);
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: red;">Error al cargar promociones de la BD.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: red;">Error BD o Tabla Promociones no existe aún.</td></tr>`;
     }
 }
 
@@ -216,10 +222,10 @@ function renderizarTablaPromociones(promos) {
                 const diffHoras = Math.floor((limite - ahora) / (1000 * 60 * 60));
                 if(diffHoras < 24) {
                     txtTiempo = `¡En ${diffHoras}h! ⏳`;
-                    colorSemaforo = 'estado-4'; // Naranja/Warning
+                    colorSemaforo = 'estado-4';
                 } else {
                     txtTiempo = `En ${Math.floor(diffHoras/24)} días`;
-                    colorSemaforo = 'estado-3'; // Amarillo o Verde claro
+                    colorSemaforo = 'estado-3'; 
                 }
             }
         }
@@ -377,6 +383,7 @@ window.abrirModalPromo = function() {
 window.eliminarPromocion = async function(idPromo) {
     if(confirm("¿Segura de eliminar esta promoción? Dejará de funcionar de inmediato.")) {
         try {
+            // REVERTIMOS A TU CÓDIGO ORIGINAL DE ELIMINACIÓN
             const { error } = await window.supabase.from('promociones').delete().eq('id_promo', idPromo);
             if(error) throw error;
             window.mostrarToast("Promoción eliminada.", "exito");
@@ -408,22 +415,24 @@ async function dispararEmailMarketing(e) {
             if(!indEmail) throw new Error("Debes buscar y seleccionar el correo del destinatario.");
             destinatarios.push(indEmail);
         } else if (audiencia === 'TODOS') {
-            // Extrae correos de clientes activos
-            const { data: d1 } = await window.supabase.from('clientes').select('email').eq('acepta_politicas', true);
-            // Extrae correos de equipo activo
-            const { data: d2 } = await window.supabase.from('equipo').select('email').eq('estado', true);
+            const { data: d1 } = await window.supabase.from('clientes').select('email');
+            const { data: d2 } = await window.supabase.from('equipo').select('email');
             destinatarios = [...(d1||[]), ...(d2||[])].map(u => u.email).filter(e => e);
-        } else if (['CLIENTE', 'EMPRESA'].includes(audiencia)) {
-            const { data, error } = await window.supabase.from('clientes').select('email').eq('nivel_cuenta', audiencia).eq('acepta_politicas', true);
+        } else if (audiencia === 'CLIENTES_TOTALES') {
+            const { data, error } = await window.supabase.from('clientes').select('email');
             if (error) throw error;
             destinatarios = (data||[]).map(u => u.email).filter(e => e);
         } else {
-            const { data, error } = await window.supabase.from('equipo').select('email').eq('rol', audiencia).eq('estado', true);
+            // ASESOR o UGC
+            const { data, error } = await window.supabase.from('equipo').select('email').eq('rol', audiencia);
             if (error) throw error;
             destinatarios = (data||[]).map(u => u.email).filter(e => e);
         }
 
-        if (destinatarios.length === 0) throw new Error("No hay usuarios activos que coincidan con esa audiencia.");
+        // Eliminar duplicados si los hay
+        destinatarios = [...new Set(destinatarios)];
+
+        if (destinatarios.length === 0) throw new Error("No hay usuarios registrados en esa categoría.");
 
         if (!confirm(`El correo se enviará a ${destinatarios.length} dirección(es). ¿Proceder?`)) {
             btn.textContent = "🚀 Disparar Campaña de Correos"; btn.disabled = false;

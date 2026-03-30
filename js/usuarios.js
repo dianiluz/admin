@@ -474,6 +474,7 @@ window.abrirModalUsuario = function(emailEdicion = null) {
                     method: 'POST',
                     body: JSON.stringify({
                         action: 'crearUsuarioAuthYBienvenida',
+                        token: CUPISSA_CONFIG.API_TOKEN,
                         email: payload.email,
                         nombre: payload.nombre,
                         clave_temporal: claveSegura
@@ -497,7 +498,7 @@ window.abrirModalUsuario = function(emailEdicion = null) {
             try {
                 const res = await fetch(CUPISSA_CONFIG.API_URL, {
                     method: 'POST',
-                    body: JSON.stringify({ action: 'recuperarClave', email: u.email })
+                    body: JSON.stringify({ action: 'recuperarClave', token: CUPISSA_CONFIG.API_TOKEN, email: u.email })
                 }).then(r => r.json());
 
                 if (res.success) { window.mostrarToast("Correo de recuperación enviado exitosamente.", "exito"); btnRec.textContent = "¡Enviado!"; } 

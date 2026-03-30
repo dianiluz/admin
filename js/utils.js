@@ -1,9 +1,9 @@
 // js/utils.js
 
 // --- 1. CONEXIÓN GLOBAL A SUPABASE ---
-// Usamos window.supabase para asegurar que todos los archivos .js tengan acceso
-if (!window.supabaseClient) {
-    window.supabase = window.supabase.createClient(CUPISSA_CONFIG.supabase.url, CUPISSA_CONFIG.supabase.key);
+if (typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function') {
+    window.supabaseClient = window.supabase.createClient(CUPISSA_CONFIG.supabase.url, CUPISSA_CONFIG.supabase.key);
+    window.supabase = window.supabaseClient; 
 }
 
 // --- 2. BASE DE DATOS DE UBICACIONES (ERP) ---

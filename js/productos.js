@@ -471,7 +471,7 @@ window.abrirModalProducto = function(productoEdicion = null) {
                         
                         const res = await fetch(CUPISSA_CONFIG.API_URL, {
                             method: 'POST',
-                            body: JSON.stringify({ action: 'subirFotoGithub', nombre_archivo: fileNamePath, base64: img.base64 })
+                            body: JSON.stringify({ action: 'subirFotoGithub', token: CUPISSA_CONFIG.API_TOKEN, nombre_archivo: fileNamePath, base64: img.base64 })
                         });
                         const data = await res.json();
                         if (data.success) {

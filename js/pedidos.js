@@ -1,3 +1,4 @@
+// js/pedidos.js
 window.pedidosGlobales = [];
 window.clientesGlobales = [];
 window.productosGlobales = [];
@@ -137,8 +138,8 @@ window.renderPedidos = function() {
             </div>
         </div>
         <div class="card">
-            <div style="margin-bottom: 15px; display: flex; gap: 10px;">
-                <input type="text" id="buscador-pedidos" class="buscador-panel" placeholder="Buscar por ID, cliente, email o teléfono...">
+            <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap:wrap;">
+                <input type="text" id="buscador-pedidos" class="buscador-panel" placeholder="Buscar por ID, cliente, email o teléfono..." style="flex:1; min-width:200px;">
                 <select id="filtro-estado-pedido" class="buscador-panel" style="width: auto;">
                     <option value="">Todos los estados</option>
                     <option value="1">1 - Agendado</option>
@@ -163,7 +164,7 @@ window.renderPedidos = function() {
                         </tr>
                     </thead>
                     <tbody id="tabla-pedidos-body">
-                        <tr><td colspan="7" style="text-align:center; padding: 20px;">Cargando pedidos...</td></tr>
+                        <tr><td colspan="7" style="text-align:center; padding: 20px;">⏳ Cargando pedidos...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -254,7 +255,7 @@ function renderizarTablaPedidos(pedidos) {
             default: textoEstado = "Pendiente"; claseColor = "estado-1"; break;
         }
 
-        const clasePago = String(ped.estado_pago).toUpperCase() === 'CONFIRMADO' ? 'estado-pago-confirmado' : 'estado-pago-pendiente';
+        const clasePago = String(ped.estado_pago).toUpperCase() === 'CONFIRMADO' || String(ped.estado_pago).toUpperCase() === 'PAGADO' ? 'estado-pago-confirmado' : 'estado-pago-pendiente';
         const fEst = ped.fecha_entrega_estimada ? new Date(ped.fecha_entrega_estimada).toLocaleDateString('es-CO') : '--';
         const fReal = ped.fecha_entrega_real ? new Date(ped.fecha_entrega_real).toLocaleDateString('es-CO') : '--';
         const cli = window.clientesGlobales.find(c => c.id_cliente === ped.id_cliente) || {};
@@ -329,7 +330,7 @@ window.aplicarProductoAFila = function(tr, m) {
         const div = document.createElement('div');
         div.style.display = 'flex'; div.style.gap = '5px'; div.style.marginTop = '4px';
         div.innerHTML = `
-            <input type="text" class="comp-nombre" placeholder="Ej. Vincha Roja" style="width:60%; padding:4px; font-size:11px; border:1px solid #ccc;">
+            <input type="text" class="comp-nombre" placeholder="Ej. Vincha" style="width:60%; padding:4px; font-size:11px; border:1px solid #ccc;">
             <input type="number" class="comp-precio calc-trigger" value="0" min="0" placeholder="$0" style="width:30%; padding:4px; font-size:11px; border:1px solid #ccc;">
             <button type="button" class="btn-eliminar-comp" style="width:10%; color:white; background:red; border:none; border-radius:3px; cursor:pointer; font-weight:bold;">X</button>
         `;
@@ -421,17 +422,19 @@ window.abrirModalCrearPedido = async function() {
                             <div class="form-group" style="margin-bottom:10px;">
                                 <label>Método de Pago</label>
                                 <select id="erp-metodo-pago" class="calc-trigger">
-                                    <option value="Transferencia">Transferencia Directa</option>
+                                    <option value="Transferencia">Transferencia Directa (Bancolombia/Nequi)</option>
+                                    <option value="Efectivo">Efectivo Caja Fuerte</option>
                                     <option value="Wompi">Wompi (El cliente asume comisión)</option>
                                     <option value="Contraentrega">Contraentrega Efectivo</option>
                                 </select>
                             </div>
                             <div class="form-group" style="margin-bottom:10px;">
-                                <label>Tipo de Abono</label>
+                                <label>Tipo de Abono Cobrado</label>
                                 <select id="erp-tipo-abono" class="calc-trigger">
-                                    <option value="100">100% (Pago Total)</option>
+                                    <option value="100">100% (Pago Total Inicial)</option>
                                     <option value="50">50% (Mitad)</option>
                                     <option value="20">20% (Anticipo Mínimo)</option>
+                                    <option value="0">0% (Fiado / Pendiente)</option>
                                 </select>
                             </div>
                             <div class="form-group" style="margin-top:15px; background: rgba(219, 19, 122, 0.1); padding: 10px; border-radius: 4px; border: 1px solid rgba(219, 19, 122, 0.3);">
@@ -462,17 +465,17 @@ window.abrirModalCrearPedido = async function() {
                                 <span><strong>Total Pedido (Con Comisiones):</strong></span> <strong id="erp-lbl-total" style="color:var(--color-primario);">$0</strong>
                             </div>
                             <div style="display:flex; justify-content:space-between; margin-bottom: 5px; background: #e0f2fe; padding: 5px; border-radius:4px;">
-                                <span><strong>Anticipo a Cobrar AHORA:</strong></span> <strong id="erp-lbl-anticipo">$0</strong>
+                                <span><strong>Dinero Físico/Real a Ingresar AHORA:</strong></span> <strong id="erp-lbl-anticipo" style="color:#0ea5e9;">$0</strong>
                             </div>
                             <div style="display:flex; justify-content:space-between;">
-                                <span>Saldo Pendiente (Neto):</span> <strong id="erp-lbl-saldo" style="color: var(--color-peligro);">$0</strong>
+                                <span>Saldo Pendiente del Cliente:</span> <strong id="erp-lbl-saldo" style="color: var(--color-peligro);">$0</strong>
                             </div>
                         </div>
                     </div>
 
                     <div class="modal-actions">
                         <button type="button" class="btn-secundario" id="btn-cerrar-erp">Cancelar</button>
-                        <button type="submit" class="btn-primario">Crear Pedido Oficial</button>
+                        <button type="submit" class="btn-primario">Crear Pedido y Contabilizar Ingreso</button>
                     </div>
                 </form>
             </div>
@@ -806,6 +809,7 @@ window.abrirModalCrearPedido = async function() {
 
         const idPed = "CUP-" + Date.now().toString().slice(-8);
         let idClienteFinal = document.getElementById('erp-id-cliente').value;
+        const nombreClienteFinal = document.getElementById('erp-nombre').value;
 
         if (document.getElementById('erp-guardar-cliente').checked) {
             const ccVal = document.getElementById('erp-cc').value.replace(/\D/g, '');
@@ -815,7 +819,7 @@ window.abrirModalCrearPedido = async function() {
             const { data: clienteDB, error: cliErr } = await window.supabase.from('clientes').upsert({
                 id_cliente: idClienteFinal || undefined, 
                 email: emailVal,
-                nombre: document.getElementById('erp-nombre').value,
+                nombre: nombreClienteFinal,
                 cc: ccVal ? parseInt(ccVal) : null,
                 telefono: telVal ? parseInt(telVal) : null,
                 ciudad: document.getElementById('erp-ciudad').value,
@@ -828,69 +832,78 @@ window.abrirModalCrearPedido = async function() {
         }
 
         const telPed = document.getElementById('erp-telefono').value.replace(/\D/g, '');
+        const metodoPagoBase = document.getElementById('erp-metodo-pago').value;
+        const totalConComision = parseInt(document.getElementById('erp-lbl-total').textContent.replace(/\D/g, ''));
+        const anticipoIngreso = parseInt(document.getElementById('erp-lbl-anticipo').textContent.replace(/\D/g, ''));
+        const saldoPend = parseInt(document.getElementById('erp-lbl-saldo').textContent.replace(/\D/g, ''));
+        
+        let estadoPagoStr = "PENDIENTE";
+        if (saldoPend <= 0 && anticipoIngreso > 0) estadoPagoStr = "PAGADO";
+        else if (anticipoIngreso > 0) estadoPagoStr = "CONFIRMADO"; // Abono parcial confirma el pedido
+
         const pedData = {
             id_pedido: idPed,
             tipo: "VENTA ERP",
             id_cliente: idClienteFinal || null,
             telefono_envio: telPed ? parseInt(telPed) : null,
             direccion_envio: document.getElementById('erp-direccion').value,
-            total: parseInt(document.getElementById('erp-lbl-total').textContent.replace(/\D/g, '')),
+            total: totalConComision,
             estado: 1,
-            estado_pago: "PENDIENTE",
-            metodo_pago: document.getElementById('erp-metodo-pago').value,
-            valor_anticipo: parseInt(document.getElementById('erp-lbl-anticipo').textContent.replace(/\D/g, '')),
-            saldo_pendiente: parseInt(document.getElementById('erp-lbl-saldo').textContent.replace(/\D/g, '')),
+            estado_pago: estadoPagoStr,
+            metodo_pago: metodoPagoBase,
+            valor_anticipo: anticipoIngreso,
+            saldo_pendiente: saldoPend,
             transportadora: document.getElementById('erp-transportadora').value,
             aplica_cupicoins: document.getElementById('erp-aplica-cupicoins').checked,
             cupicoins_otorgados: false
         };
 
         try {
+            // 1. Guardar el Pedido
             const { error: pedErr } = await window.supabase.from('pedidos').insert([pedData]);
             if(pedErr) throw pedErr;
 
+            // 2. Guardar Productos
             const prodsAInsertar = productosPedido.map(p => ({
-                id_pedido: idPed,
-                ref_producto: p.ref_producto,
-                detalles_personalizacion: p.detalles_personalizacion,
-                cantidad: p.cantidad,
-                precio_unitario: p.precio_unitario
+                id_pedido: idPed, ref_producto: p.ref_producto, detalles_personalizacion: p.detalles_personalizacion,
+                cantidad: p.cantidad, precio_unitario: p.precio_unitario
             }));
-
             const { error: prodErr } = await window.supabase.from('pedidos_productos').insert(prodsAInsertar);
             if(prodErr) throw prodErr;
 
-            // --- LLAMADA A APPS SCRIPT PARA CORREOS Y AUTH ---
+            // 3. ✨ INYECCIÓN FINANCIERA: Registrar Ingreso en Auditoría Financiera
+            if (anticipoIngreso > 0 && metodoPagoBase !== 'Contraentrega') {
+                let metodoFinanzas = metodoPagoBase;
+                if (metodoFinanzas === 'Transferencia') metodoFinanzas = 'Bancolombia/Nequi';
+                
+                await window.supabase.from('finanzas').insert([{ 
+                    tipo: 'INGRESO', 
+                    categoria: '4135 - Ingreso por Venta (Anticipo)', 
+                    monto: anticipoIngreso, 
+                    metodo_pago: metodoFinanzas, 
+                    descripcion: `Anticipo Pedido ERP: ${idPed}`, 
+                    creado_por: nombreClienteFinal 
+                }]);
+            }
+
+            // 4. Enviar Correos y Auto-Auth
             try {
                 if (document.getElementById('erp-guardar-cliente').checked && !idClienteFinal) {
                     const claveTemp = `Cupissa${Date.now().toString().slice(-4)}*`;
                     fetch(CUPISSA_CONFIG.API_URL, {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            action: 'crearUsuarioAuthYBienvenida',
-                            email: document.getElementById('erp-email').value,
-                            nombre: document.getElementById('erp-nombre').value,
-                            clave_temporal: claveTemp
-                        })
+                        method: 'POST', body: JSON.stringify({ action: 'crearUsuarioAuthYBienvenida', email: document.getElementById('erp-email').value, nombre: nombreClienteFinal, clave_temporal: claveTemp })
                     });
                 }
                 fetch(CUPISSA_CONFIG.API_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        action: 'enviarCorreoConfirmacion',
-                        pedido: { idpedido: idPed, total: pedData.total, valor_anticipo: pedData.valor_anticipo, saldo_pendiente: pedData.saldo_pendiente },
-                        usuario: { nombre: document.getElementById('erp-nombre').value, email: document.getElementById('erp-email').value },
-                        productos: prodsAInsertar.map(p => ({ producto: p.detalles_personalizacion, cantidad: p.cantidad, precio: p.precio_unitario }))
-                    })
+                    method: 'POST', body: JSON.stringify({ action: 'enviarCorreoConfirmacion', pedido: { idpedido: idPed, total: pedData.total, valor_anticipo: pedData.valor_anticipo, saldo_pendiente: pedData.saldo_pendiente }, usuario: { nombre: nombreClienteFinal, email: document.getElementById('erp-email').value }, productos: prodsAInsertar.map(p => ({ producto: p.detalles_personalizacion, cantidad: p.cantidad, precio: p.precio_unitario })) })
                 });
             } catch (errMails) {}
-            // ------------------------------------------------
 
-            window.mostrarToast("Pedido ERP creado con éxito.", "exito");
+            window.mostrarToast("Pedido creado y caja actualizada.", "exito");
             cerrar(); cargarPedidos();
         } catch (error) {
             window.mostrarToast("Error BD: " + error.message, "error");
-            btnSubmit.textContent = "Crear Pedido Oficial"; btnSubmit.disabled = false;
+            btnSubmit.textContent = "Crear Pedido y Contabilizar Ingreso"; btnSubmit.disabled = false;
         }
     });
 };
@@ -943,12 +956,19 @@ window.abrirModalGestionPedido = async function(idPedido) {
                     <div class="detalle-seccion">
                         <h3>Info de Pago y Fechas</h3>
                         <p><strong>Método:</strong> ${pedido.metodo_pago || ''}</p>
-                        <p><strong>Total Pedido:</strong> $${total} | <strong>Saldo:</strong> $${saldo}</p>
-                        <div style="margin-top: 15px; padding: 10px; background: rgba(16, 185, 129, 0.1); border-radius: 4px; border: 1px solid #10b981;">
-                            <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor:pointer;">
-                                <input type="checkbox" id="check-pago-confirmado" ${String(pedido.estado_pago).toUpperCase() === 'CONFIRMADO' ? 'checked' : ''}> Pago Verificado
+                        <p><strong>Total Pedido:</strong> $${total} | <strong style="color:red;">Saldo:</strong> $${saldo}</p>
+                        
+                        ${Number(pedido.saldo_pendiente) > 0 ? `
+                        <div style="margin-top: 15px; padding: 10px; background: #fffbeb; border-radius: 4px; border: 1px solid #f59e0b;">
+                            <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; color:#b45309; cursor:pointer;">
+                                <input type="checkbox" id="check-saldar-deuda" style="width:16px; height:16px;"> Registrar pago del saldo restante
                             </label>
+                        </div>` : `
+                        <div style="margin-top: 15px; padding: 10px; background: rgba(16, 185, 129, 0.1); border-radius: 4px; border: 1px solid #10b981;">
+                            <span style="font-weight: 600; color: #10b981;">✅ Pedido Pagado al 100%</span>
                         </div>
+                        `}
+
                         <div style="display:flex; gap:10px; margin-top: 15px;">
                             <div style="flex:1;"><label style="font-size:12px; font-weight:600;">Fecha Est. Entrega:</label><input type="date" id="fecha-est" value="${pedido.fecha_entrega_estimada ? pedido.fecha_entrega_estimada.split('T')[0] : ''}" style="width:100%; padding:5px; border-radius:4px; border:1px solid #ccc;"></div>
                             <div style="flex:1;"><label style="font-size:12px; font-weight:600;">Fecha Real Entregado:</label><input type="date" id="fecha-real" value="${pedido.fecha_entrega_real ? pedido.fecha_entrega_real.split('T')[0] : ''}" style="width:100%; padding:5px; border-radius:4px; border:1px solid #ccc;"></div>
@@ -1002,7 +1022,7 @@ window.abrirModalGestionPedido = async function(idPedido) {
     document.getElementById('btn-x-pedido').addEventListener('click', cerrar);
     
     document.getElementById('btn-eliminar-pedido').addEventListener('click', async () => {
-        if (confirm("¿Eliminar este pedido? Es irreversible.")) {
+        if (confirm("¿Eliminar este pedido? Es irreversible y no alterará la caja en contabilidad si ya se había cobrado anticipo.")) {
             try {
                 await window.supabase.from('pedidos_productos').delete().eq('id_pedido', pedido.id_pedido);
                 await window.supabase.from('pedidos').delete().eq('id_pedido', pedido.id_pedido);
@@ -1017,34 +1037,47 @@ window.abrirModalGestionPedido = async function(idPedido) {
         try {
             const guia = document.getElementById('gestion-guia').value.replace(/\D/g, '');
             const est = parseInt(document.getElementById('gestion-estado-prod').value) || 1;
-            const pago = document.getElementById('check-pago-confirmado').checked ? "CONFIRMADO" : "PENDIENTE";
             const aplicaCupi = document.getElementById('gestion-aplica-cupicoins').checked;
 
+            const checkSaldar = document.getElementById('check-saldar-deuda');
+            const saldoCancelado = checkSaldar && checkSaldar.checked;
+            
             const payload = {
                 estado: est, guia: guia ? parseInt(guia) : null, transportadora: document.getElementById('gestion-transportadora').value,
                 fecha_entrega_estimada: document.getElementById('fecha-est').value || null,
                 fecha_entrega_real: document.getElementById('fecha-real').value || null,
-                estado_pago: pago, aplica_cupicoins: aplicaCupi
+                aplica_cupicoins: aplicaCupi
             };
 
-            if (est === 5 && pago === 'CONFIRMADO' && aplicaCupi && !pedido.cupicoins_otorgados) {
+            // ✨ INYECCIÓN FINANCIERA 2: Si saldan la deuda en este momento
+            if (saldoCancelado) {
+                payload.saldo_pendiente = 0;
+                payload.estado_pago = 'PAGADO';
+                await window.supabase.from('finanzas').insert([{ 
+                    tipo: 'INGRESO', 
+                    categoria: '4135 - Ingreso por Venta (Saldo Final)', 
+                    monto: Number(pedido.saldo_pendiente), 
+                    metodo_pago: pedido.metodo_pago === 'Transferencia' ? 'Bancolombia' : pedido.metodo_pago, 
+                    descripcion: `Cancelación saldo del Pedido ERP: ${pedido.id_pedido}`, 
+                    creado_por: cli.nombre || 'Cliente ERP' 
+                }]);
+            }
+
+            if (est === 5 && (payload.estado_pago === 'PAGADO' || pedido.estado_pago === 'PAGADO' || pedido.estado_pago === 'CONFIRMADO') && aplicaCupi && !pedido.cupicoins_otorgados) {
                 if (cli && cli.id_cliente) {
                     const { data: histo } = await window.supabase.from('cupicoins_historial').select('*').eq('id_cliente', cli.id_cliente).eq('motivo', `Pedido ${pedido.id_pedido}`);
                     if (!histo || histo.length === 0) {
-                        // CÁLCULO EXCLUSIVO SOBRE PRODUCTOS (Sin flete)
                         let subtotalProd = 0;
                         prodsDB.forEach(p => subtotalProd += (Number(p.precio_unitario || 0) * Number(p.cantidad || 1)));
                         
                         const pts = Math.floor(subtotalProd / 1000) * 5;
                         if (pts > 0) {
-                            const saldo = Number(cli.cupicoins_totales || 0);
-                            await window.supabase.from('clientes').update({ cupicoins_totales: saldo + pts }).eq('id_cliente', cli.id_cliente);
+                            const saldoC = Number(cli.cupicoins_totales || 0);
+                            await window.supabase.from('clientes').update({ cupicoins_totales: saldoC + pts }).eq('id_cliente', cli.id_cliente);
                             await window.supabase.from('cupicoins_historial').insert([{ id_cliente: cli.id_cliente, movimiento: pts, motivo: `Pedido ${pedido.id_pedido}` }]);
-                            window.mostrarToast(`¡Se otorgaron ${pts} CupiCoins (Solo por productos)!`, "exito");
+                            window.mostrarToast(`¡Se otorgaron ${pts} CupiCoins!`, "exito");
                             payload.cupicoins_otorgados = true; 
                         }
-                    } else {
-                        window.mostrarToast(`CupiCoins ya habían sido otorgados antes.`, "exito");
                     }
                 }
             }

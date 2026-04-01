@@ -3,251 +3,232 @@
 window.inventarioGlobal = [];
 window.parametrosInv = { categorias: [], unidades: [] };
 
+// ==========================================
+// 1. INTERFAZ PRINCIPAL
+// ==========================================
 window.renderInventario = function() {
     const dynamicContent = document.getElementById('dynamic-content');
     
-    const estilosInventario = `
+    dynamicContent.innerHTML = `
         <style>
-            .inv-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; flex-wrap: wrap; gap: 15px; }
-            .inv-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
-            .inv-kpi-card { background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; border-left: 4px solid #db137a; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-            .inv-kpi-titulo { font-size: 11px; color: #64748b; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
-            .inv-kpi-valor { font-size: 24px; font-weight: bold; color: #334155; }
-            .inv-search { padding: 10px 15px; border: 1px solid #cbd5e1; border-radius: 6px; width: 100%; max-width: 300px; outline: none; }
-            .inv-search:focus { border-color: #db137a; }
-            .btn-accion-sm { padding: 4px 8px; font-size: 11px; border-radius: 4px; cursor: pointer; border: none; font-weight: bold; }
-            .btn-edit { background: #f1f5f9; color: #334155; }
-            .btn-edit:hover { background: #e2e8f0; }
-            .btn-ajuste { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
-            .btn-ajuste:hover { background: #dcfce7; }
-            .btn-del { background: #fef2f2; color: #b91c1c; }
-            .btn-del:hover { background: #fee2e2; }
-            .badge-cat { padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
-            
-            .input-group { display: flex; gap: 5px; }
-            .btn-add-param { background: #e2e8f0; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 12px; cursor: pointer; font-weight: bold; color: #334155; transition: 0.2s; }
-            .btn-add-param:hover { background: #db137a; color: white; border-color: #db137a; }
+            .inv-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px; }
+            .panel-resumen { background: #1e293b; color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; }
+            .p-valor { font-size: 22px; font-weight: bold; color: #db137a; }
+            .search-box { position: relative; display: flex; gap: 8px; width: 100%; max-width: 500px; }
+            .inv-search { width: 100%; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 10px; outline: none; }
+            .row-master { background: white; border-bottom: 2px solid #f1f5f9; cursor: pointer; }
+            .row-color { background: #f8fafc; display: none; border-bottom: 1px solid #edf2f7; font-size: 13px; }
+            .badge-stock { padding: 4px 10px; border-radius: 20px; font-weight: bold; color: white; font-size: 12px; }
+            .critico { border-left: 5px solid #ef4444 !important; }
+            .alerta { border-left: 5px solid #f59e0b !important; }
+            .btn-pdf { background: #e11d48; color: white; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 5px; }
         </style>
-    `;
 
-    dynamicContent.innerHTML = estilosInventario + `
         <div class="inv-header">
             <div>
-                <h2 style="margin:0; font-family:'Bree Serif'; color:var(--color-primario);">📦 Bodega e Inventario Maestro</h2>
-                <p style="margin:5px 0 0 0; color:#64748b; font-size:13px;">Auditoría y control de insumos, telas y productos base.</p>
+                <h2 style="font-family:'Bree Serif'; color:var(--color-primario); margin:0;">📦 Bodega Cupissa Pro</h2>
+                <p style="margin:5px 0 0 0; color:#64748b;">Inventario Agrupado, Historial y Exportación PDF.</p>
             </div>
             <div style="display:flex; gap:10px;">
-                <input type="text" id="inv-buscador" class="inv-search" placeholder="🔍 Buscar insumo o categoría..." oninput="filtrarInventario()">
-                <button class="btn-primario" onclick="abrirModalInsumo()">+ Nuevo Insumo</button>
+                <div class="search-box">
+                    <input type="text" id="inv-buscador" class="inv-search" placeholder="Buscar..." onkeyup="filtrarInventario()">
+                    <button class="btn-icon" onclick="document.getElementById('input-scan').click()">📷</button>
+                    <input type="file" id="input-scan" accept="image/*" capture="environment" style="display:none" onchange="escanearProducto(this)">
+                </div>
+                <button class="btn-pdf" onclick="exportarPDF()">📄 Exportar PDF</button>
+                <button class="btn-primario" onclick="abrirModalInsumo()">+ Nuevo Item</button>
             </div>
         </div>
 
-        <div class="inv-kpi-grid">
-            <div class="inv-kpi-card" style="border-left-color: #0ea5e9;">
-                <div class="inv-kpi-titulo">Total Items Registrados</div>
-                <div class="inv-kpi-valor" id="kpi-items">0</div>
-            </div>
-            <div class="inv-kpi-card" style="border-left-color: #10b981;">
-                <div class="inv-kpi-titulo">Valorización de Bodega</div>
-                <div class="inv-kpi-valor" id="kpi-valor">$0</div>
-            </div>
-            <div class="inv-kpi-card" style="border-left-color: #f59e0b;">
-                <div class="inv-kpi-titulo">Items en Stock Cero</div>
-                <div class="inv-kpi-valor" id="kpi-alertas">0</div>
-            </div>
+        <div class="panel-resumen">
+            <div><small>PRODUCTOS</small><div id="total-unicos" class="p-valor">0</div></div>
+            <div><small>STOCK FÍSICO</small><div id="total-stock" class="p-valor">0</div></div>
+            <div><small>INVERSIÓN</small><div id="total-dinero" class="p-valor">$0</div></div>
+            <div><small>ALERTAS</small><div id="total-alertas" style="color:#ef4444; font-weight:bold; font-size:22px;">0</div></div>
         </div>
 
-        <div class="card" style="overflow-x:auto; padding:0;">
-            <table class="data-table" style="width:100%; border-collapse:collapse; min-width:800px;">
-                <thead style="background:#f8fafc;">
+        <button id="btn-delete-mass" style="background:#ef4444; color:white; padding:10px; border:none; border-radius:8px; margin-bottom:10px; cursor:pointer; display:none;" onclick="eliminarSeleccionados()">
+            🗑️ Eliminar Seleccionados (<span id="count-sel">0</span>)
+        </button>
+
+        <div class="card" style="padding:0; overflow:hidden; border-radius:12px; border:1px solid #e2e8f0;">
+            <table style="width:100%; border-collapse:collapse; text-align:left;">
+                <thead style="background:#f1f5f9;">
                     <tr>
-                        <th style="padding:15px;">Nombre del Artículo</th>
+                        <th style="padding:15px; width:30px;"><input type="checkbox" onclick="seleccionarTodo(this)"></th>
+                        <th style="padding:15px;">Producto</th>
                         <th style="padding:15px;">Categoría</th>
-                        <th style="padding:15px;">Stock Actual</th>
-                        <th style="padding:15px;">Costo Promedio</th>
-                        <th style="padding:15px;">Valor Total</th>
+                        <th style="padding:15px;">Stock Físico</th>
+                        <th style="padding:15px;">Inversión</th>
                         <th style="padding:15px; text-align:right;">Acciones</th>
                     </tr>
                 </thead>
-                <tbody id="tabla-inventario">
-                    <tr><td colspan="6" style="text-align:center; padding:30px; color:#64748b;">⏳ Cargando bodega...</td></tr>
-                </tbody>
+                <tbody id="tabla-consolidada"></tbody>
             </table>
         </div>
     `;
-
     cargarDatosInventario();
 };
 
 // ==========================================
-// LECTURA DE SUPABASE CORREGIDA
+// 2. LÓGICA DE DATOS Y AGRUPACIÓN
 // ==========================================
 async function cargarDatosInventario() {
-    try {
-        // Se quitó el .catch() que generaba el error
-        const [resInv, resParam] = await Promise.all([
-            window.supabase.from('inventario_insumos').select('*').order('categoria', { ascending: true }).order('nombre', { ascending: true }),
-            window.supabase.from('parametros_inventario').select('*')
-        ]);
+    const [resInv, resParam] = await Promise.all([
+        window.supabase.from('inventario_insumos').select('*').order('nombre', { ascending: true }),
+        window.supabase.from('parametros_inventario').select('*')
+    ]);
 
-        if (resInv.error) throw resInv.error;
-        
-        window.inventarioGlobal = resInv.data || [];
-        
-        window.parametrosInv = { categorias: [], unidades: [] };
-        if(resParam && resParam.data) {
-            resParam.data.forEach(p => {
-                if(p.tipo === 'CATEGORIA') window.parametrosInv.categorias.push(p.valor);
-                if(p.tipo === 'UNIDAD') window.parametrosInv.unidades.push(p.valor);
-            });
+    window.inventarioGlobal = resInv.data || [];
+    window.parametrosInv = { categorias: [], unidades: [] };
+    resParam.data?.forEach(p => {
+        if(p.tipo === 'CATEGORIA') window.parametrosInv.categorias.push(p.valor);
+        if(p.tipo === 'UNIDAD') window.parametrosInv.unidades.push(p.valor);
+    });
+
+    actualizarInterfaz(window.inventarioGlobal);
+}
+
+function actualizarInterfaz(datos) {
+    const tbody = document.getElementById('tabla-consolidada');
+    tbody.innerHTML = '';
+    const grupos = {};
+    let tStock = 0, tDinero = 0, tAlertas = 0;
+
+    datos.forEach(item => {
+        const nombre = item.nombre.trim().toUpperCase();
+        if (!grupos[nombre]) {
+            grupos[nombre] = { items: [], stock: 0, valor: 0, cat: item.categoria };
         }
+        grupos[nombre].items.push(item);
+        const cant = Number(item.cantidad_actual || 0);
+        grupos[nombre].stock += cant;
+        grupos[nombre].valor += (cant * Number(item.costo_promedio || 0));
+        tStock += cant;
+        tDinero += (cant * Number(item.costo_promedio || 0));
+        if(cant <= 2) tAlertas++;
+    });
 
-        renderizarTablaInventario(window.inventarioGlobal);
-        actualizarKPIsInventario(window.inventarioGlobal);
-        
-    } catch (err) {
-        document.getElementById('tabla-inventario').innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Error al cargar datos: ${err.message}</td></tr>`;
-    }
-}
-
-function renderizarTablaInventario(datos) {
-    const tbody = document.getElementById('tabla-inventario');
-    if (datos.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:#64748b;">No hay insumos registrados en la bodega.</td></tr>';
-        return;
-    }
-
-    let filas = '';
-    datos.forEach(item => {
-        const valorTotal = Number(item.cantidad_actual || 0) * Number(item.costo_promedio || 0);
-        const alertaCero = Number(item.cantidad_actual) <= 0 ? 'color:#ef4444; font-weight:bold;' : 'color:#1e293b; font-weight:bold;';
-        
-        filas += `
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-                <td style="padding:15px;"><b>${item.nombre}</b><br><small style="color:#94a3b8;">Últ. Act: ${new Date(item.ultima_actualizacion).toLocaleDateString()}</small></td>
-                <td style="padding:15px;"><span class="badge-cat">${item.categoria || 'INSUMO'}</span></td>
-                <td style="padding:15px; ${alertaCero}">${item.cantidad_actual} ${item.unidad_medida}</td>
-                <td style="padding:15px;">$${Number(item.costo_promedio).toLocaleString('es-CO')}</td>
-                <td style="padding:15px; color:#0ea5e9; font-weight:bold;">$${valorTotal.toLocaleString('es-CO')}</td>
-                <td style="padding:15px; text-align:right;">
-                    <button class="btn-accion-sm btn-ajuste" onclick="abrirModalAjusteStock('${item.id}', '${item.nombre}', ${item.cantidad_actual}, '${item.unidad_medida}')">± Ajuste Rápido</button>
-                    <button class="btn-accion-sm btn-edit" onclick='abrirModalInsumo(${JSON.stringify(item).replace(/'/g, "&#39;")})'>✏️ Editar</button>
-                    <button class="btn-accion-sm btn-del" onclick="eliminarInsumo('${item.id}', '${item.nombre}')">🗑️</button>
-                </td>
-            </tr>
+    Object.keys(grupos).forEach(nombre => {
+        const g = grupos[nombre];
+        const idG = nombre.replace(/\s+/g, '_');
+        const st = g.stock;
+        const master = document.createElement('tr');
+        master.className = `row-master ${st <= 0 ? 'critico' : st <= 2 ? 'alerta' : ''}`;
+        master.innerHTML = `
+            <td style="padding:15px;"><input type="checkbox" class="chk-item" data-ids='${JSON.stringify(g.items.map(i => i.id))}' onchange="gestionarBtnMass()"></td>
+            <td style="padding:15px;" onclick="toggleDetalle('${idG}')">
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <img src="${g.items[0].foto_url || 'https://via.placeholder.com/45'}" style="width:40px; height:40px; border-radius:6px; object-fit:cover;">
+                    <div><b>${nombre}</b><br><small style="color:#db137a;">▼ Ver ${g.items.length} Colores</small></div>
+                </div>
+            </td>
+            <td style="padding:15px;">${g.cat}</td>
+            <td style="padding:15px;"><span class="badge-stock" style="background:${st <= 2 ? '#ef4444' : '#10b981'};">${st} Unidades</span></td>
+            <td style="padding:15px; font-weight:bold;">$${g.valor.toLocaleString()}</td>
+            <td style="padding:15px; text-align:right;"><button class="btn-accion-sm" onclick="toggleDetalle('${idG}')">Colores</button></td>
         `;
+        tbody.appendChild(master);
+
+        g.items.forEach(cItem => {
+            const rowC = document.createElement('tr');
+            rowC.className = `row-color row-det-${idG}`;
+            rowC.innerHTML = `
+                <td style="padding:10px 40px;"><input type="checkbox" class="chk-item" value="${cItem.id}" onchange="gestionarBtnMass()"></td>
+                <td style="padding:10px 15px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <img src="${cItem.foto_url || 'https://via.placeholder.com/35'}" style="width:35px; height:35px; border-radius:4px; object-fit:cover;">
+                        <span>🎨 ${cItem.color} <small>(${cItem.referencia})</small></span>
+                    </div>
+                </td>
+                <td></td>
+                <td style="padding:10px 15px;">${cItem.cantidad_actual} ${cItem.unidad_medida}</td>
+                <td style="padding:10px 15px;">$${(cItem.cantidad_actual * cItem.costo_promedio).toLocaleString()}</td>
+                <td style="padding:10px 15px; text-align:right;">
+                    <div style="display:flex; gap:5px; justify-content:flex-end;">
+                        <button class="btn-accion-sm" onclick='abrirModalInsumo(${JSON.stringify(cItem)})'>✏️</button>
+                        <button class="btn-accion-sm" style="color:#ef4444;" onclick="eliminarUno('${cItem.id}', '${cItem.nombre}')">🗑️</button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(rowC);
+        });
     });
-    tbody.innerHTML = filas;
+
+    document.getElementById('total-unicos').innerText = Object.keys(grupos).length;
+    document.getElementById('total-stock').innerText = tStock;
+    document.getElementById('total-dinero').innerText = `$${tDinero.toLocaleString('es-CO')}`;
+    document.getElementById('total-alertas').innerText = tAlertas;
 }
 
-function actualizarKPIsInventario(datos) {
-    let valorizacion = 0;
-    let alertas = 0;
-    datos.forEach(item => {
-        valorizacion += (Number(item.cantidad_actual || 0) * Number(item.costo_promedio || 0));
-        if (Number(item.cantidad_actual || 0) <= 0) alertas++;
+// ==========================================
+// 3. EXPORTACIÓN PDF PROFESIONAL
+// ==========================================
+window.exportarPDF = function() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'pt', 'a4');
+    
+    // Configuración de Logo y Título
+    doc.setFontSize(20);
+    doc.setTextColor(219, 19, 122); // Color Primario Cupissa
+    doc.text("CUPISSA - INVENTARIO DE BODEGA", 40, 50);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Fecha de reporte: ${new Date().toLocaleString()}`, 40, 65);
+    doc.text(`Inversión Total: ${document.getElementById('total-dinero').innerText}`, 40, 78);
+
+    const columns = ["Referencia", "Producto", "Color", "Categoría", "Stock", "Costo", "Total"];
+    const rows = window.inventarioGlobal.map(i => [
+        i.referencia, i.nombre, i.color, i.categoria, i.cantidad_actual, `$${i.costo_promedio.toLocaleString()}`, `$${(i.cantidad_actual * i.costo_promedio).toLocaleString()}`
+    ]);
+
+    doc.autoTable({
+        startY: 100,
+        head: [columns],
+        body: rows,
+        theme: 'striped',
+        headStyles: { fillStyle: 'fill', fillColor: [219, 19, 122], textColor: [255, 255, 255] },
+        styles: { fontSize: 8 },
+        didDrawPage: (data) => {
+            doc.text("Reporte generado por Cupissa Admin Pro", 40, doc.internal.pageSize.height - 20);
+        }
     });
 
-    document.getElementById('kpi-items').innerText = datos.length;
-    document.getElementById('kpi-valor').innerText = `$${valorizacion.toLocaleString('es-CO')}`;
-    document.getElementById('kpi-alertas').innerText = alertas;
-    if(alertas > 0) document.getElementById('kpi-alertas').style.color = '#ef4444';
-}
-
-window.filtrarInventario = function() {
-    const texto = document.getElementById('inv-buscador').value.toLowerCase();
-    const filtrados = window.inventarioGlobal.filter(item => 
-        item.nombre.toLowerCase().includes(texto) || 
-        (item.categoria && item.categoria.toLowerCase().includes(texto))
-    );
-    renderizarTablaInventario(filtrados);
+    doc.save(`Inventario_Cupissa_${Date.now()}.pdf`);
 };
 
 // ==========================================
-// PARÁMETROS DINÁMICOS
-// ==========================================
-window.agregarParametroDinamico = async function(tipo, selectId) {
-    const nombreVisual = tipo === 'CATEGORIA' ? 'Categoría' : 'Unidad de Medida';
-    const nuevoValor = prompt(`Ingresa el nombre de la nueva ${nombreVisual}:`);
-    
-    if(!nuevoValor || nuevoValor.trim() === '') return;
-    const valorLimpio = nuevoValor.trim().toUpperCase();
-    
-    try {
-        const { error } = await window.supabase.from('parametros_inventario').insert([{ tipo: tipo, valor: valorLimpio }]);
-        if(error) throw error;
-        
-        if(tipo === 'CATEGORIA') window.parametrosInv.categorias.push(valorLimpio);
-        else window.parametrosInv.unidades.push(valorLimpio);
-
-        const select = document.getElementById(selectId);
-        const option = document.createElement('option');
-        option.value = valorLimpio;
-        option.text = valorLimpio;
-        option.selected = true; 
-        select.add(option);
-
-        if(typeof window.mostrarToast === 'function') window.mostrarToast(`${nombreVisual} guardada`, "exito");
-    } catch(err) {
-        alert("Error al crear parámetro: " + err.message);
-    }
-};
-
-// ==========================================
-// MODAL: CREAR / EDITAR INSUMO
+// 4. MODAL CON FOTO POR COLOR E HISTORIAL
 // ==========================================
 window.abrirModalInsumo = function(item = null) {
     const esEdit = item !== null;
-    
-    const optionsCat = window.parametrosInv.categorias.map(c => `<option value="${c}" ${esEdit && item.categoria === c ? 'selected' : ''}>${c}</option>`).join('');
-    const optionsUnd = window.parametrosInv.unidades.map(u => `<option value="${u}" ${esEdit && item.unidad_medida === u ? 'selected' : ''}>${u}</option>`).join('');
-
     const modalHtml = `
         <div class="modal-overlay" id="modal-insumo">
-            <div class="modal-content" style="max-width:500px; padding:0; border-radius:8px; overflow:hidden;">
-                <div style="background:var(--color-primario); color:white; padding:15px 25px; display:flex; justify-content:space-between;">
-                    <h3 style="margin:0; font-size:16px;">${esEdit ? '✏️ Editar Artículo de Bodega' : '📦 Registrar Nuevo Artículo'}</h3>
-                    <button onclick="this.closest('.modal-overlay').remove()" style="background:none; border:none; color:white; cursor:pointer; font-size:20px;">&times;</button>
+            <div class="modal-content" style="max-width:450px; border-radius:15px; padding:0; overflow:hidden;">
+                <div style="background:var(--color-primario); color:white; padding:15px; display:flex; justify-content:space-between;">
+                    <h3 style="margin:0;">${esEdit ? 'Editar Variante' : 'Nuevo Registro'}</h3>
+                    <button onclick="document.getElementById('modal-insumo').remove()" style="background:none; border:none; color:white; font-size:25px; cursor:pointer;">&times;</button>
                 </div>
-                <form id="form-insumo" style="padding:25px; background:white;">
+                <form id="form-insumo" style="padding:20px;">
                     <input type="hidden" name="id" value="${esEdit ? item.id : ''}">
-                    
-                    <label style="display:block; font-size:11px; font-weight:bold; color:#64748b; margin-bottom:5px;">Nombre del Insumo / Producto</label>
-                    <input type="text" name="nombre" value="${esEdit ? item.nombre : ''}" required style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; margin-bottom:15px; box-sizing:border-box;">
-                    
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:15px;">
-                        <div>
-                            <label style="display:block; font-size:11px; font-weight:bold; color:#64748b; margin-bottom:5px;">Categoría</label>
-                            <div class="input-group">
-                                <select id="sel-categoria" name="categoria" required style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
-                                    ${optionsCat}
-                                </select>
-                                <button type="button" class="btn-add-param" onclick="agregarParametroDinamico('CATEGORIA', 'sel-categoria')" title="Agregar nueva categoría">+</button>
-                            </div>
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:11px; font-weight:bold; color:#64748b; margin-bottom:5px;">Unidad de Medida</label>
-                            <div class="input-group">
-                                <select id="sel-unidad" name="unidad_medida" required style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
-                                    ${optionsUnd}
-                                </select>
-                                <button type="button" class="btn-add-param" onclick="agregarParametroDinamico('UNIDAD', 'sel-unidad')" title="Agregar nueva unidad">+</button>
-                            </div>
-                        </div>
+                    <label style="font-size:11px; font-weight:bold;">NOMBRE DEL PRODUCTO</label>
+                    <input type="text" name="nombre" required class="inv-search" value="${esEdit ? item.nombre : ''}" style="margin-bottom:10px;">
+                    <label style="font-size:11px; font-weight:bold;">COLOR</label>
+                    <input type="text" name="color" required class="inv-search" value="${esEdit ? item.color : ''}" style="margin-bottom:15px;">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px;">
+                        <select name="categoria" class="inv-search">${window.parametrosInv.categorias.map(c => `<option value="${c}" ${esEdit && item.categoria === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
+                        <select name="unidad" class="inv-search">${window.parametrosInv.unidades.map(u => `<option value="${u}" ${esEdit && item.unidad_medida === u ? 'selected' : ''}>${u}</option>`).join('')}</select>
                     </div>
-
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px; background:#f8fafc; padding:15px; border-radius:6px; border:1px solid #e2e8f0;">
-                        <div>
-                            <label style="display:block; font-size:11px; font-weight:bold; color:#64748b; margin-bottom:5px;">Stock Inicial / Actual</label>
-                            <input type="number" step="0.01" name="cantidad_actual" value="${esEdit ? item.cantidad_actual : '0'}" required style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box; font-weight:bold;">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:11px; font-weight:bold; color:#64748b; margin-bottom:5px;">Costo Promedio (Por Und/Metro)</label>
-                            <input type="number" step="0.01" name="costo_promedio" value="${esEdit ? item.costo_promedio : '0'}" required style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box; font-weight:bold;">
-                        </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px;">
+                        <input type="number" name="cantidad" placeholder="Stock" required class="inv-search" value="${esEdit ? item.cantidad_actual : ''}">
+                        <input type="number" name="costo" placeholder="Costo" required class="inv-search" value="${esEdit ? item.costo_promedio : ''}">
                     </div>
-
-                    <button type="submit" class="btn-primario" id="btn-save-inv" style="width:100%; padding:15px;">${esEdit ? 'Guardar Cambios' : 'Registrar en Bodega'}</button>
+                    <label style="font-size:11px; font-weight:bold;">FOTO DE ESTE COLOR</label>
+                    <input type="file" id="f-cam-color" accept="image/*" capture="environment" style="display:none;" onchange="previewImg(this)">
+                    <button type="button" class="inv-search" onclick="document.getElementById('f-cam-color').click()">📷 Tomar Foto</button>
+                    <div id="prev-color" style="text-align:center; margin-top:10px;"></div>
+                    <button type="submit" class="btn-primario" style="width:100%; padding:15px; border-radius:10px; margin-top:10px;">GUARDAR</button>
                 </form>
             </div>
         </div>
@@ -256,98 +237,61 @@ window.abrirModalInsumo = function(item = null) {
 
     document.getElementById('form-insumo').onsubmit = async (e) => {
         e.preventDefault();
-        const btn = document.getElementById('btn-save-inv'); btn.innerText = "Guardando..."; btn.disabled = true;
         const fd = new FormData(e.target);
-        
+        const nom = fd.get('nombre').toUpperCase();
+        const col = fd.get('color').toUpperCase();
+        const nStock = Number(fd.get('cantidad'));
+
         const payload = {
-            nombre: fd.get('nombre'),
-            categoria: fd.get('categoria'),
-            cantidad_actual: Number(fd.get('cantidad_actual')),
-            unidad_medida: fd.get('unidad_medida'),
-            costo_promedio: Number(fd.get('costo_promedio')),
-            ultima_actualizacion: new Date().toISOString()
+            nombre: nom, color: col,
+            categoria: fd.get('categoria'), unidad_medida: fd.get('unidad'),
+            cantidad_actual: nStock, costo_promedio: Number(fd.get('costo')),
+            stock_minimo: 2, ultima_actualizacion: new Date().toISOString()
         };
 
-        try {
-            if (esEdit) {
-                const { error } = await window.supabase.from('inventario_insumos').update(payload).eq('id', fd.get('id'));
-                if (error) throw error;
-                if(typeof window.mostrarToast === 'function') window.mostrarToast("Insumo actualizado", "exito");
-            } else {
-                const { error } = await window.supabase.from('inventario_insumos').insert([payload]);
-                if (error) throw error;
-                if(typeof window.mostrarToast === 'function') window.mostrarToast("Insumo creado", "exito");
+        if (esEdit) {
+            // Historial automático si cambia el stock
+            if (item.cantidad_actual != nStock) {
+                await window.supabase.from('historial_stock').insert([{
+                    id_item: item.id, nombre_item: `${nom} (${col})`,
+                    cantidad_anterior: item.cantidad_actual, cantidad_nueva: nStock,
+                    motivo: 'AJUSTE MANUAL', fecha: new Date().toISOString()
+                }]);
             }
-            
-            document.getElementById('modal-insumo').remove();
-            cargarDatosInventario(); 
-        } catch (err) {
-            alert("Error al guardar: " + err.message);
-            btn.innerText = "Guardar"; btn.disabled = false;
+            await window.supabase.from('inventario_insumos').update(payload).eq('id', fd.get('id'));
+        } else {
+            const { count } = await window.supabase.from('inventario_insumos').select('*', { count: 'exact', head: true });
+            payload.referencia = `INSCUP${String(count + 1).padStart(4, '0')}`;
+            await window.supabase.from('inventario_insumos').insert([payload]);
         }
+        document.getElementById('modal-insumo').remove();
+        cargarDatosInventario();
     };
 };
 
 // ==========================================
-// MODAL: AJUSTE RÁPIDO DE STOCK
+// 5. FUNCIONES DE CONTROL
 // ==========================================
-window.abrirModalAjusteStock = function(id, nombre, stockActual, unidad) {
-    const modalHtml = `
-        <div class="modal-overlay" id="modal-ajuste">
-            <div class="modal-content" style="max-width:350px; padding:25px; text-align:center;">
-                <h3 style="margin-top:0; color:#166534;">Ajuste de Stock</h3>
-                <p style="color:#64748b; font-size:13px;">Insumo: <b>${nombre}</b></p>
-                <p style="margin-bottom:20px;">Stock en sistema: <b style="font-size:18px;">${stockActual} ${unidad}</b></p>
-                
-                <form id="form-ajuste">
-                    <label style="display:block; text-align:left; font-size:11px; font-weight:bold; color:#64748b; margin-bottom:5px;">Nuevo Stock Real (Conteo Físico)</label>
-                    <input type="number" step="0.01" name="nuevo_stock" required placeholder="Ej: ${stockActual}" style="width:100%; padding:12px; border:2px solid #bbf7d0; border-radius:6px; margin-bottom:20px; font-size:18px; text-align:center; font-weight:bold; outline:none; box-sizing:border-box;">
-                    
-                    <div style="display:flex; gap:10px;">
-                        <button type="button" class="btn-secundario" style="flex:1;" onclick="document.getElementById('modal-ajuste').remove()">Cancelar</button>
-                        <button type="submit" class="btn-primario" style="flex:1; background:#166534; border:none;" id="btn-save-ajuste">Confirmar</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-
-    document.getElementById('form-ajuste').onsubmit = async (e) => {
-        e.preventDefault();
-        const btn = document.getElementById('btn-save-ajuste'); btn.innerText = "..."; btn.disabled = true;
-        const nuevoStock = Number(new FormData(e.target).get('nuevo_stock'));
-
-        try {
-            const { error } = await window.supabase.from('inventario_insumos').update({ 
-                cantidad_actual: nuevoStock,
-                ultima_actualizacion: new Date().toISOString()
-            }).eq('id', id);
-            
-            if (error) throw error;
-            if(typeof window.mostrarToast === 'function') window.mostrarToast("Stock ajustado correctamente", "exito");
-            
-            document.getElementById('modal-ajuste').remove();
-            cargarDatosInventario();
-        } catch (err) {
-            alert("Error al ajustar: " + err.message);
-            btn.innerText = "Confirmar"; btn.disabled = false;
-        }
-    };
+window.escanearProducto = () => { window.mostrarToast("Escaneando...", "info"); };
+window.filtrarInventario = () => {
+    const q = document.getElementById('inv-buscador').value.toUpperCase();
+    const f = window.inventarioGlobal.filter(i => i.nombre.includes(q) || i.color.includes(q) || i.referencia?.includes(q));
+    actualizarInterfaz(f);
 };
-
-// ==========================================
-// ELIMINAR INSUMO
-// ==========================================
-window.eliminarInsumo = async function(id, nombre) {
-    if(confirm(`⚠️ ATENCIÓN MODO DIOS ⚠️\n\n¿Estás seguro que deseas ELIMINAR el insumo "${nombre}" de la base de datos de forma permanente?\n\nEsta acción no se puede deshacer.`)) {
-        try {
-            const { error } = await window.supabase.from('inventario_insumos').delete().eq('id', id);
-            if (error) throw error;
-            if(typeof window.mostrarToast === 'function') window.mostrarToast("Insumo eliminado de la bodega", "exito");
-            cargarDatosInventario();
-        } catch (err) {
-            alert("Error al eliminar: " + err.message);
-        }
+window.toggleDetalle = (id) => { document.querySelectorAll(`.row-det-${id}`).forEach(r => r.style.display = r.style.display === 'table-row' ? 'none' : 'table-row'); };
+window.gestionarBtnMass = () => {
+    const n = document.querySelectorAll('.chk-item:checked').length;
+    document.getElementById('btn-delete-mass').style.display = n > 0 ? 'block' : 'none';
+    document.getElementById('count-sel').innerText = n;
+};
+window.previewImg = (input) => {
+    if (input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = (e) => document.getElementById('prev-color').innerHTML = `<img src="${e.target.result}" style="width:60px; border-radius:8px;">`;
+        reader.readAsDataURL(input.files[0]);
     }
 };
+window.eliminarUno = async (id, nombre) => {
+    if(confirm(`¿Borrar ${nombre}?`)) { await window.supabase.from('inventario_insumos').delete().eq('id', id); cargarDatosInventario(); }
+};
+window.seleccionarTodo = (src) => { document.querySelectorAll('.chk-item').forEach(c => c.checked = src.checked); gestionarBtnMass(); };

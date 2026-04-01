@@ -22,12 +22,9 @@ window.renderInventario = function() {
             .critico { border-left: 5px solid #ef4444 !important; }
             .alerta { border-left: 5px solid #f59e0b !important; }
             .btn-pdf { background: #e11d48; color: white; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; }
-            
-            /* Estilos para Previsualización de Imagen */
-            .img-preview-thumb { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; cursor: zoom-in; transition: 0.2s; border: 1px solid #ddd; }
-            .img-preview-thumb:hover { transform: scale(1.1); }
+            .img-preview-thumb { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; cursor: zoom-in; border: 1px solid #ddd; }
             .full-img-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; display: none; align-items: center; justify-content: center; cursor: zoom-out; }
-            .full-img-overlay img { max-width: 90%; max-height: 90%; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+            .full-img-overlay img { max-width: 90%; max-height: 90%; border-radius: 8px; }
         </style>
 
         <div id="full-img-viewer" class="full-img-overlay" onclick="this.style.display='none'">
@@ -37,13 +34,13 @@ window.renderInventario = function() {
         <div class="inv-header">
             <div>
                 <h2 style="font-family:'Bree Serif'; color:var(--color-primario); margin:0;">📦 Bodega Cupissa Pro</h2>
-                <p style="margin:5px 0 0 0; color:#64748b;">Inventario Agrupado e Imágenes a Pantalla Completa.</p>
+                <p style="margin:5px 0 0 0; color:#64748b;">Referencias Automáticas, Rutas Git y PDF.</p>
             </div>
             <div style="display:flex; gap:10px;">
                 <div class="search-box">
                     <input type="text" id="inv-buscador" class="inv-search" placeholder="Buscar..." onkeyup="filtrarInventario()">
                 </div>
-                <button class="btn-pdf" onclick="exportarPDF()">📄 PDF</button>
+                <button class="btn-pdf" onclick="exportarPDF()">📄 Exportar PDF</button>
                 <button class="btn-primario" onclick="abrirModalInsumo()">+ Nuevo Item</button>
             </div>
         </div>
@@ -79,7 +76,7 @@ window.renderInventario = function() {
 };
 
 // ==========================================
-// 2. CARGA Y VISUALIZACIÓN
+// 2. DATOS Y AGRUPACIÓN
 // ==========================================
 async function cargarDatosInventario() {
     const [resInv, resParam] = await Promise.all([
@@ -146,7 +143,7 @@ function actualizarInterfaz(datos) {
                 <td style="padding:10px 15px;">
                     <div style="display:flex; align-items:center; gap:8px;">
                         <img src="${cItem.foto_url || 'https://via.placeholder.com/35'}" class="img-preview-thumb" style="width:30px; height:30px;" onclick="event.stopPropagation(); zoomImg(this.src)">
-                        <span>🎨 ${cItem.color} <small>(${cItem.referencia})</small></span>
+                        <span>🎨 ${cItem.color} <small>(${cItem.referencia || 'S/R'})</small></span>
                     </div>
                 </td>
                 <td></td>
@@ -170,56 +167,47 @@ function actualizarInterfaz(datos) {
 }
 
 // ==========================================
-// 3. ELIMINACIÓN Y CONTROL
+// 3. EXPORTACIÓN PDF
 // ==========================================
-window.gestionarBtnMass = function() {
-    const seleccionados = document.querySelectorAll('.chk-item:checked').length;
-    const btn = document.getElementById('btn-delete-mass');
-    btn.style.display = seleccionados > 0 ? 'block' : 'none';
-    document.getElementById('count-sel').innerText = seleccionados;
-};
+window.exportarPDF = function() {
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'pt', 'a4');
+        const colorPrimario = [219, 19, 122];
+        
+        doc.setFontSize(22);
+        doc.setTextColor(colorPrimario[0], colorPrimario[1], colorPrimario[2]);
+        doc.text("CUPISSA - REPORTE DE BODEGA", 40, 50);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Fecha: ${new Date().toLocaleString()}`, 40, 65);
 
-window.eliminarSeleccionados = async function() {
-    const checks = document.querySelectorAll('.chk-item:checked');
-    let idsParaBorrar = [];
+        const filas = window.inventarioGlobal.map(i => [
+            i.referencia || 'S/R',
+            i.nombre.toUpperCase(),
+            (i.color || 'ÚNICO').toUpperCase(),
+            i.categoria,
+            i.cantidad_actual,
+            `$${Number(i.costo_promedio).toLocaleString()}`,
+            `$${(i.cantidad_actual * i.costo_promedio).toLocaleString()}`
+        ]);
 
-    checks.forEach(c => {
-        if (c.classList.contains('chk-group')) {
-            // Si es un checkbox de grupo, extraemos el array de IDs
-            const grupoIds = JSON.parse(c.dataset.ids);
-            idsParaBorrar = idsParaBorrar.concat(grupoIds);
-        } else {
-            // Si es un color individual
-            idsParaBorrar.push(c.value);
-        }
-    });
+        doc.autoTable({
+            head: [['REF', 'PRODUCTO', 'COLOR', 'CAT', 'STOCK', 'COSTO', 'TOTAL']],
+            body: filas,
+            startY: 90,
+            theme: 'grid',
+            headStyles: { fillColor: colorPrimario, fontSize: 8 },
+            styles: { fontSize: 7 }
+        });
 
-    // Limpiar duplicados por si se marcó el grupo y el hijo a la vez
-    idsParaBorrar = [...new Set(idsParaBorrar)];
-
-    if (idsParaBorrar.length === 0) return;
-
-    if (confirm(`⚠️ ATENCIÓN: Estás a punto de eliminar ${idsParaBorrar.length} registros permanentemente. ¿Proceder?`)) {
-        const { error } = await window.supabase.from('inventario_insumos').delete().in('id', idsParaBorrar);
-        if (!error) {
-            window.mostrarToast("Eliminación masiva completada", "exito");
-            cargarDatosInventario();
-            document.getElementById('btn-delete-mass').style.display = 'none';
-        } else {
-            alert("Error al eliminar: " + error.message);
-        }
-    }
-};
-
-window.zoomImg = function(url) {
-    const viewer = document.getElementById('full-img-viewer');
-    const img = document.getElementById('img-zoom');
-    img.src = url;
-    viewer.style.display = 'flex';
+        doc.save(`Inventario_Cupissa_${Date.now()}.pdf`);
+    } catch (e) { alert("Error al generar PDF. Verifique que las librerías estén cargadas."); }
 };
 
 // ==========================================
-// 4. MODAL Y REGISTRO (CÁMARA TRASERA ACTIVA)
+// 4. MODAL, REF AUTOMÁTICA Y RUTA GIT
 // ==========================================
 window.abrirModalInsumo = function(item = null) {
     const esEdit = item !== null;
@@ -244,7 +232,7 @@ window.abrirModalInsumo = function(item = null) {
                         <input type="number" name="cantidad" placeholder="Stock" required class="inv-search" value="${esEdit ? item.cantidad_actual : ''}">
                         <input type="number" name="costo" placeholder="Costo" required class="inv-search" value="${esEdit ? item.costo_promedio : ''}">
                     </div>
-                    <label style="font-size:11px; font-weight:bold;">FOTO DE ESTE COLOR</label>
+                    <label style="font-size:11px; font-weight:bold;">FOTO (CÁMARA O ARCHIVO)</label>
                     <input type="file" id="f-cam-color" accept="image/*" capture="environment" style="display:none;" onchange="previewImg(this)">
                     <button type="button" class="inv-search" onclick="document.getElementById('f-cam-color').click()">📷 Abrir Cámara</button>
                     <div id="prev-color" style="text-align:center; margin-top:10px;"></div>
@@ -258,19 +246,25 @@ window.abrirModalInsumo = function(item = null) {
     document.getElementById('form-insumo').onsubmit = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
-        const nom = fd.get('nombre').toUpperCase();
-        const col = fd.get('color').toUpperCase();
+        const nom = fd.get('nombre').trim().toUpperCase();
+        const col = fd.get('color').trim().toUpperCase();
         const nStock = Number(fd.get('cantidad'));
+        
+        // RUTA DINÁMICA PARA GIT
+        const folder = nom.replace(/\s+/g, '_');
+        const file = col.replace(/\s+/g, '_');
+        const gitPath = `assets/inventario/${folder}/${file}.jpg`;
 
-        const payload = {
+        let payload = {
             nombre: nom, color: col,
             categoria: fd.get('categoria'), unidad_medida: fd.get('unidad'),
             cantidad_actual: nStock, costo_promedio: Number(fd.get('costo')),
-            stock_minimo: 2, ultima_actualizacion: new Date().toISOString()
+            stock_minimo: 2, ultima_actualizacion: new Date().toISOString(),
+            foto_url: gitPath
         };
 
         if (esEdit) {
-            // Historial si cambia stock
+            // Historial automático
             if (item.cantidad_actual != nStock) {
                 await window.supabase.from('historial_stock').insert([{
                     id_item: item.id, nombre_item: `${nom} (${col})`,
@@ -280,6 +274,7 @@ window.abrirModalInsumo = function(item = null) {
             }
             await window.supabase.from('inventario_insumos').update(payload).eq('id', fd.get('id'));
         } else {
+            // GENERACIÓN DE REFERENCIA AUTOMÁTICA INSCUP000X
             const { count } = await window.supabase.from('inventario_insumos').select('*', { count: 'exact', head: true });
             payload.referencia = `INSCUP${String(count + 1).padStart(4, '0')}`;
             await window.supabase.from('inventario_insumos').insert([payload]);
@@ -292,16 +287,35 @@ window.abrirModalInsumo = function(item = null) {
 // ==========================================
 // 5. UTILIDADES
 // ==========================================
+window.gestionarBtnMass = () => {
+    const n = document.querySelectorAll('.chk-item:checked').length;
+    document.getElementById('btn-delete-mass').style.display = n > 0 ? 'block' : 'none';
+    document.getElementById('count-sel').innerText = n;
+};
+window.eliminarSeleccionados = async () => {
+    const checks = document.querySelectorAll('.chk-item:checked');
+    let ids = [];
+    checks.forEach(c => {
+        if(c.classList.contains('chk-group')) ids = ids.concat(JSON.parse(c.dataset.ids));
+        else ids.push(c.value);
+    });
+    if(confirm(`¿Borrar ${[...new Set(ids)].length} registros?`)) {
+        await window.supabase.from('inventario_insumos').delete().in('id', ids);
+        cargarDatosInventario();
+    }
+};
+window.zoomImg = (url) => {
+    if(!url || url.includes('placeholder')) return;
+    document.getElementById('img-zoom').src = url;
+    document.getElementById('full-img-viewer').style.display = 'flex';
+};
 window.filtrarInventario = () => {
     const q = document.getElementById('inv-buscador').value.toUpperCase();
     const f = window.inventarioGlobal.filter(i => i.nombre.includes(q) || i.color.includes(q) || i.referencia?.includes(q));
     actualizarInterfaz(f);
 };
 window.toggleDetalle = (id) => { document.querySelectorAll(`.row-det-${id}`).forEach(r => r.style.display = r.style.display === 'table-row' ? 'none' : 'table-row'); };
-window.seleccionarTodo = (src) => { 
-    document.querySelectorAll('.chk-item').forEach(c => c.checked = src.checked); 
-    gestionarBtnMass(); 
-};
+window.seleccionarTodo = (src) => { document.querySelectorAll('.chk-item').forEach(c => c.checked = src.checked); gestionarBtnMass(); };
 window.eliminarUno = async (id, nombre) => {
     if(confirm(`¿Borrar ${nombre}?`)) { await window.supabase.from('inventario_insumos').delete().eq('id', id); cargarDatosInventario(); }
 };

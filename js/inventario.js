@@ -1,14 +1,13 @@
 // js/inventario.js
-
 window.inventarioGlobal = [];
 window.parametrosInv = { categorias: [], unidades: [] };
+let imgBase64Procesada = ""; 
 
 // ==========================================
-// 1. INTERFAZ Y ESTILOS
+// 1. INTERFAZ Y ESTILOS (DISEÑO BLINDADO)
 // ==========================================
 window.renderInventario = function() {
     const dynamicContent = document.getElementById('dynamic-content');
-    
     dynamicContent.innerHTML = `
 <style>
     .inv-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px; }
@@ -16,67 +15,46 @@ window.renderInventario = function() {
     .p-valor { font-size: 18px; font-weight: bold; color: #db137a; }
     .inv-search { width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 10px; outline: none; font-size: 14px; }
     
-    table { width: 100%; border-collapse: collapse; }
-    .row-master { background: white; border-bottom: 2px solid #f1f5f9; cursor: pointer; }
-    .row-color { background: #f9fafb; display: none; border-bottom: 1px solid #e2e8f0; }
-    .badge-stock { padding: 4px 10px; border-radius: 20px; font-weight: bold; color: white; font-size: 11px; }
+    .card-inv { background: white; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 15px; overflow: hidden; position: relative; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
     
-    .critico { border-left: 5px solid #ef4444 !important; }
-    .alerta { border-left: 5px solid #f59e0b !important; }
+    /* CUADRÍCULA DE COLORES */
+    .color-grid-box { display: none; background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 15px; width: 100%; box-sizing: border-box; }
+    .color-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); gap: 10px; }
+    .color-item { background: white; border: 1px solid #cbd5e1; border-radius: 10px; padding: 8px; text-align: center; cursor: pointer; position: relative; }
+    .color-item img { width: 100%; height: 60px; object-fit: cover; border-radius: 6px; }
+    .mini-qty { position: absolute; top: -5px; right: -5px; background: #db137a; color: white; font-size: 10px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 2px solid white; font-weight: bold; }
 
-    @media (max-width: 768px) {
-        thead { display: none; }
-        tr.row-master, tr.row-color { 
-            display: flex; flex-direction: column; padding: 15px; margin-bottom: 12px;
-            border: 1px solid #e2e8f0; border-radius: 12px; position: relative; background: white;
-        }
-        td { display: flex; justify-content: space-between; align-items: center; padding: 8px 0 !important; border: none !important; width: 100% !important; }
-        td::before { content: attr(data-label); font-weight: 700; color: #94a3b8; font-size: 10px; text-transform: uppercase; min-width: 100px; }
-        td:nth-child(2) { border-bottom: 1px solid #f1f5f9 !important; margin-bottom: 10px; padding-bottom: 12px !important; justify-content: flex-start !important; gap: 12px; }
-        td:nth-child(2)::before { content: ""; }
-        td:nth-child(1) { position: absolute; top: 15px; right: 15px; width: auto !important; }
-        td:nth-child(1)::before { content: ""; }
-        .row-color { margin-left: 10px; width: calc(100% - 10px); background: #fcfcfc; border-style: dashed; }
-    }
+    /* ESTILOS DE TARJETA MÓVIL */
+    .master-info { padding: 15px; cursor: pointer; }
+    .master-header { display: flex; align-items: center; gap: 15px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 10px; }
+    .master-body { display: grid; gap: 8px; }
+    .data-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+    .data-label { font-weight: 700; color: #94a3b8; font-size: 10px; text-transform: uppercase; }
 
-    .img-preview-thumb { width: 50px; height: 50px; border-radius: 10px; object-fit: cover; background: #f1f5f9; border: 1px solid #e2e8f0; cursor: zoom-in; }
+    .img-thumb { width: 50px; height: 50px; border-radius: 10px; object-fit: cover; background: #f1f5f9; border: 1px solid #ddd; }
     .full-img-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; display: none; align-items: center; justify-content: center; }
+    
+    .btn-mass-delete { background:#ef4444; color:white; padding:12px; border:none; border-radius:10px; margin-bottom:15px; cursor:pointer; display:none; width:100%; font-weight:bold; }
 </style>
 
-        <div id="full-img-viewer" class="full-img-overlay" onclick="this.style.display='none'">
-            <img id="img-zoom" src="">
-        </div>
+    <div id="full-img-viewer" class="full-img-overlay" onclick="this.style.display='none'"><img id="img-zoom" src="" style="max-width:90%; border-radius:10px;"></div>
 
-        <div class="inv-header">
-            <h2 style="font-family:'Bree Serif'; color:var(--color-primario); margin:0;">📦 Bodega Cupissa</h2>
-            <div style="display:flex; gap:10px; width:100%;">
-                <input type="text" id="inv-buscador" class="inv-search" placeholder="🔍 Buscar..." onkeyup="filtrarInventario()">
-                <button class="btn-primario" onclick="abrirModalInsumo()">+ Nuevo</button>
-            </div>
+    <div class="inv-header">
+        <h2 style="font-family:'Bree Serif'; color:var(--color-primario); margin:0;">📦 Bodega Cupissa Maestro</h2>
+        <div style="display:flex; gap:10px; width:100%;">
+            <input type="text" id="inv-buscador" class="inv-search" placeholder="🔍 Buscar producto..." onkeyup="filtrarInventario()">
+            <button class="btn-pdf" onclick="exportarPDF()" style="background:#e11d48; color:white; border:none; padding:10px; border-radius:10px; cursor:pointer; font-weight:bold;">📄 PDF</button>
+            <button class="btn-primario" onclick="abrirModalInsumo()">+ Nuevo</button>
         </div>
+    </div>
 
-        <div class="panel-resumen">
-            <div><small>PRODUCTOS</small><div id="total-unicos" class="p-valor">0</div></div>
-            <div><small>STOCK TOTAL</small><div id="total-stock" class="p-valor">0</div></div>
-            <div><small>VALORIZACIÓN</small><div id="total-dinero" class="p-valor">$0</div></div>
-            <div><small>ALERTAS</small><div id="total-alertas" style="color:#ef4444; font-weight:bold;">0</div></div>
-        </div>
+    <div class="panel-resumen" id="resumen-container"></div>
 
-        <div class="card" style="padding:0; overflow:hidden; border-radius:12px; border:1px solid #e2e8f0;">
-            <table id="tabla-maestra">
-                <thead style="background:#f1f5f9;">
-                    <tr>
-                        <th style="padding:15px; width:30px;"><input type="checkbox" onclick="seleccionarTodo(this)"></th>
-                        <th style="padding:15px;">Producto</th>
-                        <th style="padding:15px;">Categoría</th>
-                        <th style="padding:15px;">Stock Total</th>
-                        <th style="padding:15px;">Inversión</th>
-                        <th style="padding:15px; text-align:right;">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody id="tabla-consolidada"></tbody>
-            </table>
-        </div>
+    <button id="btn-delete-mass" class="btn-mass-delete" onclick="eliminarSeleccionados()">
+        🗑️ Eliminar seleccionados (<span id="count-sel">0</span>)
+    </button>
+
+    <div id="lista-inventario"></div>
     `;
     cargarDatosInventario();
 };
@@ -85,196 +63,217 @@ window.renderInventario = function() {
 // 2. LÓGICA DE DATOS
 // ==========================================
 async function cargarDatosInventario() {
-    const [resInv, resParam] = await Promise.all([
-        window.supabase.from('inventario_insumos').select('*').order('nombre', { ascending: true }),
-        window.supabase.from('parametros_inventario').select('*')
-    ]);
-
-    window.inventarioGlobal = resInv.data || [];
-    window.parametrosInv = { 
-        categorias: resParam.data?.filter(p => p.tipo === 'CATEGORIA').map(p => p.valor) || [],
-        unidades: resParam.data?.filter(p => p.tipo === 'UNIDAD').map(p => p.valor) || []
-    };
-
+    const { data, error } = await window.supabase.from('inventario_insumos').select('*').order('nombre');
+    if (error) return;
+    window.inventarioGlobal = data || [];
     actualizarInterfaz(window.inventarioGlobal);
 }
 
 function actualizarInterfaz(datos) {
-    const tbody = document.getElementById('tabla-consolidada');
-    tbody.innerHTML = '';
+    const container = document.getElementById('lista-inventario');
+    const resumen = document.getElementById('resumen-container');
+    container.innerHTML = '';
     const grupos = {};
     let tStock = 0, tDinero = 0, tAlertas = 0;
 
     datos.forEach(item => {
-        const nombre = item.nombre.trim().toUpperCase();
-        if (!grupos[nombre]) grupos[nombre] = { items: [], stock: 0, valor: 0, cat: item.categoria };
-        grupos[nombre].items.push(item);
-        const cant = Number(item.cantidad_actual || 0);
-        grupos[nombre].stock += cant;
-        grupos[nombre].valor += (cant * Number(item.costo_promedio || 0));
-        tStock += cant;
-        tDinero += (cant * Number(item.costo_promedio || 0));
-        if(cant <= 2) tAlertas++;
+        const n = item.nombre.toUpperCase();
+        if (!grupos[n]) grupos[n] = { items: [], stock: 0, valor: 0, cat: item.categoria };
+        grupos[n].items.push(item);
+        const qty = Number(item.cantidad_actual || 0);
+        grupos[n].stock += qty;
+        grupos[n].valor += (qty * Number(item.costo_promedio || 0));
+        tStock += qty; tDinero += (qty * Number(item.costo_promedio || 0));
+        if(qty <= 2) tAlertas++;
     });
+
+    if(resumen) resumen.innerHTML = `
+        <div><small>PRODUCTOS</small><div class="p-valor">${Object.keys(grupos).length}</div></div>
+        <div><small>STOCK TOTAL</small><div class="p-valor">${tStock}</div></div>
+        <div><small>VALORIZACIÓN</small><div class="p-valor">$${tDinero.toLocaleString()}</div></div>
+        <div><small>ALERTAS</small><div style="color:#ef4444; font-weight:bold; font-size:18px;">${tAlertas}</div></div>
+    `;
 
     Object.keys(grupos).forEach(nombre => {
         const g = grupos[nombre];
         const idG = nombre.replace(/\s+/g, '_');
-        
-        const master = document.createElement('tr');
-        master.className = `row-master ${g.stock <= 2 ? 'alerta' : ''}`;
-        master.innerHTML = `
-            <td data-label="Selección"><input type="checkbox" class="chk-item chk-group" data-ids='${JSON.stringify(g.items.map(i => i.id))}'></td>
-            <td onclick="toggleDetalle('${idG}')">
-                <img src="${g.items[0].foto_url || ''}" class="img-preview-thumb" onerror="this.src='https://cdn-icons-png.flaticon.com/512/685/685655.png'" onclick="event.stopPropagation(); zoomImg(this.src)">
-                <div><b>${nombre}</b><br><small style="color:#db137a;">▼ ${g.items.length} VARIANTES</small></div>
-            </td>
-            <td data-label="Categoría">${g.cat}</td>
-            <td data-label="Stock Total"><span class="badge-stock" style="background:${g.stock <= 2 ? '#ef4444' : '#10b981'};">${g.stock} Units</span></td>
-            <td data-label="Inversión">$${g.valor.toLocaleString()}</td>
-            <td data-label="Acciones" style="text-align:right;"><button class="btn-accion-sm" onclick="toggleDetalle('${idG}')">Ver</button></td>
+        const card = document.createElement('div');
+        card.className = 'card-inv';
+        card.innerHTML = `
+            <div class="master-info" onclick="toggleGrid('${idG}')">
+                <input type="checkbox" class="chk-item chk-group" onclick="event.stopPropagation()" onchange="gestionarBtnMass()" style="position:absolute; top:15px; right:15px; width:20px; height:20px;" data-ids='${JSON.stringify(g.items.map(i => i.id))}'>
+                <div class="master-header">
+                    <img src="${g.items[0].foto_url || ''}" class="img-thumb" onerror="this.src='https://cdn-icons-png.flaticon.com/512/685/685655.png'" onclick="event.stopPropagation(); zoomImg(this.src)">
+                    <div><b>${nombre}</b><br><small style="color:#db137a; font-weight:bold;">▼ ${g.items.length} COLORES</small></div>
+                </div>
+                <div class="master-body">
+                    <div class="data-row"><span class="data-label">Categoría</span><span>${g.cat}</span></div>
+                    <div class="data-row"><span class="data-label">Stock Total</span><b style="color:${g.stock <= 2 ? '#ef4444' : '#10b981'}">${g.stock} Units</b></div>
+                    <div class="data-row"><span class="data-label">Inversión</span><b>$${g.valor.toLocaleString()}</b></div>
+                </div>
+            </div>
+            <div class="color-grid-box" id="grid-${idG}">
+                <div class="color-grid">
+                    ${g.items.map(c => `
+                        <div class="color-item" onclick='abrirQuickEdit(${JSON.stringify(c)})'>
+                            <div class="mini-qty">${c.cantidad_actual}</div>
+                            <img src="${c.foto_url}" onerror="this.src='https://cdn-icons-png.flaticon.com/512/685/685655.png'">
+                            <span>${c.color}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
         `;
-        tbody.appendChild(master);
-
-        g.items.forEach(cItem => {
-            const rowC = document.createElement('tr');
-            rowC.className = `row-color row-det-${idG}`;
-            rowC.innerHTML = `
-                <td data-label="Selección"><input type="checkbox" class="chk-item chk-single" value="${cItem.id}"></td>
-                <td data-label="Color">
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <img src="${cItem.foto_url || ''}" class="img-preview-thumb" style="width:35px; height:35px;" onerror="this.src='https://cdn-icons-png.flaticon.com/512/685/685655.png'" onclick="event.stopPropagation(); zoomImg(this.src)">
-                        <span>🎨 ${cItem.color} <br><small>(${cItem.referencia || 'S/R'})</small></span>
-                    </div>
-                </td>
-                <td data-label="Unidad">${cItem.unidad_medida}</td>
-                <td data-label="Stock">${cItem.cantidad_actual}</td>
-                <td data-label="Inversión">$${(cItem.cantidad_actual * cItem.costo_promedio).toLocaleString()}</td>
-                <td data-label="Acciones" style="text-align:right;">
-                    <div style="display:flex; gap:8px; justify-content:flex-end;">
-                        <button class="btn-accion-sm" onclick='abrirModalInsumo(${JSON.stringify(cItem)})'>✏️</button>
-                        <button class="btn-accion-sm" style="color:#ef4444;" onclick="eliminarUno('${cItem.id}', '${cItem.nombre}')">🗑️</button>
-                    </div>
-                </td>
-            `;
-            tbody.appendChild(rowC);
-        });
+        container.appendChild(card);
     });
-
-    document.getElementById('total-unicos').innerText = Object.keys(grupos).length;
-    document.getElementById('total-stock').innerText = tStock;
-    document.getElementById('total-dinero').innerText = `$${tDinero.toLocaleString('es-CO')}`;
-    document.getElementById('total-alertas').innerText = tAlertas;
 }
 
 // ==========================================
-// 3. MODAL Y MANEJO DE IMAGEN (SOLUCIÓN)
+// 3. MINI MODAL DE CONTROL (STOCK + IMAGEN)
 // ==========================================
-window.abrirModalInsumo = function(item = null) {
-    const esEdit = item !== null;
-    let base64Temp = esEdit ? item.foto_url : ""; // Para mostrar la imagen actual
-
+window.abrirQuickEdit = (item) => {
+    imgBase64Procesada = item.foto_url;
     const modalHtml = `
-        <div class="modal-overlay" id="modal-insumo">
-            <div class="modal-content" style="max-width:450px; border-radius:15px; padding:0; overflow:hidden;">
-                <div style="background:var(--color-primario); color:white; padding:15px; display:flex; justify-content:space-between;">
-                    <h3 style="margin:0;">${esEdit ? 'Editar Variante' : 'Nuevo Registro'}</h3>
-                    <button onclick="document.getElementById('modal-insumo').remove()" style="background:none; border:none; color:white; font-size:25px; cursor:pointer;">&times;</button>
+        <div class="modal-overlay" id="modal-quick">
+            <div class="modal-content" style="max-width:320px; text-align:center; padding:20px; border-radius:25px;">
+                <input type="file" id="f-quick-cam" accept="image/*" capture="environment" style="display:none;" onchange="procesarFotoQuick(this)">
+                <div style="position:relative; display:inline-block;">
+                    <img id="quick-img-prev" src="${item.foto_url}" style="width:120px; height:120px; border-radius:15px; object-fit:cover; border:1px solid #eee;">
+                    <button onclick="document.getElementById('f-quick-cam').click()" style="position:absolute; bottom:0; right:0; background:#1e293b; color:white; border:none; border-radius:50%; width:35px; height:35px; cursor:pointer;">📷</button>
                 </div>
-                <form id="form-insumo" style="padding:20px;">
-                    <input type="hidden" name="id" value="${esEdit ? item.id : ''}">
-                    <label style="font-size:11px; font-weight:bold;">NOMBRE PRODUCTO</label>
-                    <input type="text" name="nombre" required class="inv-search" value="${esEdit ? item.nombre : ''}" style="margin-bottom:10px;">
-                    
-                    <label style="font-size:11px; font-weight:bold;">COLOR</label>
-                    <input type="text" name="color" required class="inv-search" value="${esEdit ? item.color : ''}" style="margin-bottom:15px;">
-                    
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px;">
-                        <select name="categoria" class="inv-search">${window.parametrosInv.categorias.map(c => `<option value="${c}" ${esEdit && item.categoria === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
-                        <select name="unidad" class="inv-search">${window.parametrosInv.unidades.map(u => `<option value="${u}" ${esEdit && item.unidad_medida === u ? 'selected' : ''}>${u}</option>`).join('')}</select>
-                    </div>
-
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px;">
-                        <input type="number" name="cantidad" placeholder="Stock" required class="inv-search" value="${esEdit ? item.cantidad_actual : ''}">
-                        <input type="number" name="costo" placeholder="Costo" required class="inv-search" value="${esEdit ? item.costo_promedio : ''}">
-                    </div>
-
-                    <label style="font-size:11px; font-weight:bold;">FOTO (CÁMARA)</label>
-                    <input type="file" id="f-cam-color" accept="image/*" capture="environment" style="display:none;" onchange="convertirYPrevisualizar(this)">
-                    <button type="button" class="inv-search" onclick="document.getElementById('f-cam-color').click()" style="margin-bottom:10px;">📷 Tomar Foto</button>
-                    
-                    <div id="prev-container" style="text-align:center; margin-bottom:15px;">
-                        <img id="img-render-prev" src="${base64Temp || ''}" style="width:80px; height:80px; object-fit:cover; border-radius:10px; display:${base64Temp ? 'inline-block' : 'none'}; border:1px solid #ddd;">
-                    </div>
-
-                    <button type="submit" class="btn-primario" style="width:100%; padding:15px; border-radius:10px;">${esEdit ? 'ACTUALIZAR' : 'GUARDAR'}</button>
-                </form>
+                <h3 style="margin:10px 0 0 0;">${item.nombre}</h3>
+                <p style="color:#64748b; margin-bottom:15px;">Color: <b>${item.color}</b></p>
+                <div style="background:#f1f5f9; padding:10px; border-radius:15px; margin-bottom:15px;">
+                    <small>STOCK ACTUAL</small>
+                    <div style="font-size:28px; font-weight:bold; color:#db137a;" id="quick-qty">${item.cantidad_actual}</div>
+                </div>
+                <div style="display:flex; justify-content:center; gap:15px; margin-bottom:15px;">
+                    <button onclick="updateQty('${item.id}', -1)" style="width:50px; height:50px; font-size:20px; border-radius:12px; border:none; background:#e2e8f0;">-</button>
+                    <button onclick="updateQty('${item.id}', 1)" style="width:50px; height:50px; font-size:20px; border-radius:12px; border:none; background:#1e293b; color:white;">+</button>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    <button onclick="guardarCambiosQuick('${item.id}')" style="padding:12px; border-radius:10px; border:none; background:#10b981; color:white; font-weight:bold;">Guardar</button>
+                    <button onclick="document.getElementById('modal-quick').remove()" style="padding:12px; border-radius:10px; border:none; background:#64748b; color:white;">Cerrar</button>
+                </div>
+                <button onclick="eliminarUno('${item.id}', '${item.color}'); document.getElementById('modal-quick').remove();" style="color:#ef4444; background:none; border:none; font-size:11px; font-weight:bold; margin-top:15px;">🗑️ ELIMINAR COLOR</button>
             </div>
-        </div>
-    `;
+        </div>`;
     document.body.insertAdjacentHTML('beforeend', modalHtml);
+};
 
-    window.convertirYPrevisualizar = (input) => {
-        if (input.files && input.files[0]) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                base64Temp = e.target.result; // Guardamos el base64 para mostrarlo ya
-                const imgPrev = document.getElementById('img-render-prev');
-                imgPrev.src = base64Temp;
-                imgPrev.style.display = 'inline-block';
+window.procesarFotoQuick = (input) => {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.src = e.target.result;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_W = 600;
+                const scale = MAX_W / img.width;
+                canvas.width = MAX_W; canvas.height = img.height * scale;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                imgBase64Procesada = canvas.toDataURL('image/jpeg', 0.6);
+                document.getElementById('quick-img-prev').src = imgBase64Procesada;
             };
-            reader.readAsDataURL(input.files[0]);
-        }
-    };
-
-    document.getElementById('form-insumo').onsubmit = async (e) => {
-        e.preventDefault();
-        const fd = new FormData(e.target);
-        const nom = fd.get('nombre').trim().toUpperCase();
-        const col = fd.get('color').trim().toUpperCase();
-        
-        // Mantener la ruta de Git para la base de datos
-        const gitPath = `assets/inventario/${nom.replace(/\s+/g, '_')}/${col.replace(/\s+/g, '_')}.jpg`;
-
-        let payload = {
-            nombre: nom, color: col, categoria: fd.get('categoria'), unidad_medida: fd.get('unidad'),
-            cantidad_actual: Number(fd.get('cantidad')), costo_promedio: Number(fd.get('costo')),
-            stock_minimo: 2, ultima_actualizacion: new Date().toISOString(), 
-            foto_url: base64Temp || gitPath // Si tomamos foto nueva, se guarda el base64 temporalmente
         };
+        reader.readAsDataURL(input.files[0]);
+    }
+};
 
-        if (esEdit) {
-            await window.supabase.from('inventario_insumos').update(payload).eq('id', fd.get('id'));
-        } else {
-            const { count } = await window.supabase.from('inventario_insumos').select('*', { count: 'exact', head: true });
-            payload.referencia = `INSCUP${String(count + 1).padStart(4, '0')}`;
-            await window.supabase.from('inventario_insumos').insert([payload]);
-        }
-        document.getElementById('modal-insumo').remove();
-        cargarDatosInventario();
-    };
+window.guardarCambiosQuick = async (id) => {
+    const qty = document.getElementById('quick-qty').innerText;
+    await window.supabase.from('inventario_insumos').update({ 
+        cantidad_actual: Number(qty),
+        foto_url: imgBase64Procesada 
+    }).eq('id', id);
+    document.getElementById('modal-quick').remove();
+    cargarDatosInventario();
+};
+
+window.updateQty = (id, change) => {
+    const el = document.getElementById('quick-qty');
+    el.innerText = Math.max(0, Number(el.innerText) + change);
 };
 
 // ==========================================
-// 4. UTILIDADES
+// 4. UTILIDADES (CHECKBOXES, PDF, FILTRO)
 // ==========================================
-window.zoomImg = (url) => { 
-    if(!url || url.includes('flaticon')) return;
-    document.getElementById('img-zoom').src = url;
-    document.getElementById('full-img-viewer').style.display = 'flex'; 
+window.gestionarBtnMass = () => {
+    const n = document.querySelectorAll('.chk-item:checked').length;
+    document.getElementById('btn-delete-mass').style.display = n > 0 ? 'block' : 'none';
+    document.getElementById('count-sel').innerText = n;
 };
 
-window.toggleDetalle = (id) => { 
-    const filas = document.querySelectorAll(`.row-det-${id}`);
-    filas.forEach(r => {
-        r.style.display = (r.style.display === 'flex' || r.style.display === 'table-row') ? 'none' : (window.innerWidth <= 768 ? 'flex' : 'table-row');
+window.eliminarSeleccionados = async () => {
+    let ids = [];
+    document.querySelectorAll('.chk-item:checked').forEach(c => {
+        if(c.classList.contains('chk-group')) ids = ids.concat(JSON.parse(c.dataset.ids));
+        else ids.push(c.value);
     });
+    if(confirm(`¿Borrar permanentemente ${[...new Set(ids)].length} registros?`)) { 
+        await window.supabase.from('inventario_insumos').delete().in('id', ids); 
+        cargarDatosInventario(); 
+    }
+};
+
+window.exportarPDF = () => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'pt', 'a4');
+    doc.setFontSize(18);
+    doc.text("REPORTE BODEGA CUPISSA", 40, 50);
+    const rows = window.inventarioGlobal.map(i => [i.referencia, i.nombre, i.color, i.cantidad_actual, i.costo_promedio]);
+    doc.autoTable({ head: [['REF', 'PRODUCTO', 'COLOR', 'STOCK', 'COSTO']], body: rows, startY: 70 });
+    doc.save("inventario_cupissa.pdf");
 };
 
 window.filtrarInventario = () => {
     const q = document.getElementById('inv-buscador').value.toUpperCase();
-    const f = window.inventarioGlobal.filter(i => i.nombre.includes(q) || i.color.includes(q) || i.referencia?.includes(q));
+    const f = window.inventarioGlobal.filter(i => i.nombre.includes(q) || i.color.includes(q));
     actualizarInterfaz(f);
 };
 
+window.toggleGrid = (id) => {
+    const el = document.getElementById(`grid-${id}`);
+    el.style.display = (el.style.display === 'block') ? 'none' : 'block';
+};
+
+window.zoomImg = (url) => { if(url.length > 50) { document.getElementById('img-zoom').src = url; document.getElementById('full-img-viewer').style.display = 'flex'; } };
 window.eliminarUno = async (id, nombre) => { if(confirm(`¿Borrar ${nombre}?`)) { await window.supabase.from('inventario_insumos').delete().eq('id', id); cargarDatosInventario(); } };
+
+window.abrirModalInsumo = function(item = null) {
+    const esEdit = item !== null;
+    imgBase64Procesada = esEdit ? item.foto_url : "";
+    const modalHtml = `
+        <div class="modal-overlay" id="modal-insumo">
+            <div class="modal-content" style="max-width:400px; padding:20px; border-radius:15px;">
+                <h3 style="margin-top:0;">${esEdit ? 'Editar' : 'Nuevo'} Item</h3>
+                <form id="form-insumo">
+                    <input type="hidden" name="id" value="${esEdit ? item.id : ''}">
+                    <input type="text" name="nombre" placeholder="Producto" required class="inv-search" value="${esEdit ? item.nombre : ''}" style="margin-bottom:10px;">
+                    <input type="text" name="color" placeholder="Color" required class="inv-search" value="${esEdit ? item.color : ''}" style="margin-bottom:10px;">
+                    <input type="number" name="cantidad" placeholder="Stock" required class="inv-search" value="${esEdit ? item.cantidad_actual : ''}" style="margin-bottom:10px;">
+                    <input type="number" name="costo" placeholder="Costo" required class="inv-search" value="${esEdit ? item.costo_promedio : ''}" style="margin-bottom:10px;">
+                    <button type="button" class="inv-search" onclick="document.getElementById('f-cam').click()" style="margin-bottom:10px;">📷 Foto</button>
+                    <input type="file" id="f-cam" accept="image/*" capture="environment" style="display:none;" onchange="procesarFotoQuick(this)">
+                    <div style="text-align:center;"><img id="img-render-prev" src="${imgBase64Procesada}" style="width:80px; height:80px; object-fit:cover; display:${imgBase64Procesada ? 'block' : 'none'}; border-radius:8px; margin-bottom:10px;"></div>
+                    <button type="submit" class="btn-primario" style="width:100%; padding:15px;">GUARDAR</button>
+                </form>
+            </div>
+        </div>`;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    document.getElementById('form-insumo').onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const payload = {
+            nombre: fd.get('nombre').toUpperCase(), color: fd.get('color').toUpperCase(),
+            cantidad_actual: Number(fd.get('cantidad')), costo_promedio: Number(fd.get('costo')),
+            foto_url: imgBase64Procesada, ultima_actualizacion: new Date().toISOString(), categoria: 'GENERAL'
+        };
+        if (esEdit) await window.supabase.from('inventario_insumos').update(payload).eq('id', fd.get('id'));
+        else await window.supabase.from('inventario_insumos').insert([payload]);
+        document.getElementById('modal-insumo').remove();
+        cargarDatosInventario();
+    };
+};

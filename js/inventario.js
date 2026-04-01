@@ -14,7 +14,6 @@ window.renderInventario = function() {
     .inv-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px; }
     .panel-resumen { background: #1e293b; color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
     .p-valor { font-size: 18px; font-weight: bold; color: #db137a; }
-    .search-box { display: flex; gap: 8px; width: 100%; max-width: 500px; }
     .inv-search { width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 10px; outline: none; font-size: 14px; }
     
     table { width: 100%; border-collapse: collapse; }
@@ -49,12 +48,9 @@ window.renderInventario = function() {
         </div>
 
         <div class="inv-header">
-            <div>
-                <h2 style="font-family:'Bree Serif'; color:var(--color-primario); margin:0;">📦 Bodega Maestro Cupissa</h2>
-            </div>
+            <h2 style="font-family:'Bree Serif'; color:var(--color-primario); margin:0;">📦 Bodega Cupissa</h2>
             <div style="display:flex; gap:10px; width:100%;">
-                <input type="text" id="inv-buscador" class="inv-search" placeholder="🔍 Buscar producto..." onkeyup="filtrarInventario()">
-                <button class="btn-pdf" onclick="exportarPDF()" style="background:#e11d48; color:white; border:none; padding:10px; border-radius:10px; cursor:pointer;">📄</button>
+                <input type="text" id="inv-buscador" class="inv-search" placeholder="🔍 Buscar..." onkeyup="filtrarInventario()">
                 <button class="btn-primario" onclick="abrirModalInsumo()">+ Nuevo</button>
             </div>
         </div>
@@ -65,10 +61,6 @@ window.renderInventario = function() {
             <div><small>VALORIZACIÓN</small><div id="total-dinero" class="p-valor">$0</div></div>
             <div><small>ALERTAS</small><div id="total-alertas" style="color:#ef4444; font-weight:bold;">0</div></div>
         </div>
-
-        <button id="btn-delete-mass" style="background:#ef4444; color:white; padding:12px; border:none; border-radius:10px; margin-bottom:15px; cursor:pointer; display:none; width:100%; font-weight:bold;" onclick="eliminarSeleccionados()">
-            🗑️ Eliminar (<span id="count-sel">0</span>) seleccionados
-        </button>
 
         <div class="card" style="padding:0; overflow:hidden; border-radius:12px; border:1px solid #e2e8f0;">
             <table id="tabla-maestra">
@@ -128,20 +120,19 @@ function actualizarInterfaz(datos) {
     Object.keys(grupos).forEach(nombre => {
         const g = grupos[nombre];
         const idG = nombre.replace(/\s+/g, '_');
-        const st = g.stock;
         
         const master = document.createElement('tr');
-        master.className = `row-master ${st <= 0 ? 'critico' : st <= 2 ? 'alerta' : ''}`;
+        master.className = `row-master ${g.stock <= 2 ? 'alerta' : ''}`;
         master.innerHTML = `
-            <td data-label="Selección"><input type="checkbox" class="chk-item chk-group" data-ids='${JSON.stringify(g.items.map(i => i.id))}' onchange="gestionarBtnMass()"></td>
+            <td data-label="Selección"><input type="checkbox" class="chk-item chk-group" data-ids='${JSON.stringify(g.items.map(i => i.id))}'></td>
             <td onclick="toggleDetalle('${idG}')">
                 <img src="${g.items[0].foto_url || ''}" class="img-preview-thumb" onerror="this.src='https://cdn-icons-png.flaticon.com/512/685/685655.png'" onclick="event.stopPropagation(); zoomImg(this.src)">
-                <div><b style="font-size:14px;">${nombre}</b><br><small style="color:#db137a; font-weight:bold;">▼ ${g.items.length} VARIANTES</small></div>
+                <div><b>${nombre}</b><br><small style="color:#db137a;">▼ ${g.items.length} VARIANTES</small></div>
             </td>
             <td data-label="Categoría">${g.cat}</td>
-            <td data-label="Stock Total"><span class="badge-stock" style="background:${st <= 2 ? '#ef4444' : '#10b981'};">${st} Unidades</span></td>
+            <td data-label="Stock Total"><span class="badge-stock" style="background:${g.stock <= 2 ? '#ef4444' : '#10b981'};">${g.stock} Units</span></td>
             <td data-label="Inversión">$${g.valor.toLocaleString()}</td>
-            <td data-label="Acciones" style="text-align:right;"><button class="btn-accion-sm" onclick="toggleDetalle('${idG}')">Detalles</button></td>
+            <td data-label="Acciones" style="text-align:right;"><button class="btn-accion-sm" onclick="toggleDetalle('${idG}')">Ver</button></td>
         `;
         tbody.appendChild(master);
 
@@ -149,7 +140,7 @@ function actualizarInterfaz(datos) {
             const rowC = document.createElement('tr');
             rowC.className = `row-color row-det-${idG}`;
             rowC.innerHTML = `
-                <td data-label="Selección"><input type="checkbox" class="chk-item chk-single" value="${cItem.id}" onchange="gestionarBtnMass()"></td>
+                <td data-label="Selección"><input type="checkbox" class="chk-item chk-single" value="${cItem.id}"></td>
                 <td data-label="Color">
                     <div style="display:flex; align-items:center; gap:10px;">
                         <img src="${cItem.foto_url || ''}" class="img-preview-thumb" style="width:35px; height:35px;" onerror="this.src='https://cdn-icons-png.flaticon.com/512/685/685655.png'" onclick="event.stopPropagation(); zoomImg(this.src)">
@@ -177,10 +168,12 @@ function actualizarInterfaz(datos) {
 }
 
 // ==========================================
-// 3. MODAL Y EDICIÓN DE IMAGEN
+// 3. MODAL Y MANEJO DE IMAGEN (SOLUCIÓN)
 // ==========================================
 window.abrirModalInsumo = function(item = null) {
     const esEdit = item !== null;
+    let base64Temp = esEdit ? item.foto_url : ""; // Para mostrar la imagen actual
+
     const modalHtml = `
         <div class="modal-overlay" id="modal-insumo">
             <div class="modal-content" style="max-width:450px; border-radius:15px; padding:0; overflow:hidden;">
@@ -190,29 +183,49 @@ window.abrirModalInsumo = function(item = null) {
                 </div>
                 <form id="form-insumo" style="padding:20px;">
                     <input type="hidden" name="id" value="${esEdit ? item.id : ''}">
-                    <label style="font-size:11px; font-weight:bold;">NOMBRE DEL PRODUCTO</label>
+                    <label style="font-size:11px; font-weight:bold;">NOMBRE PRODUCTO</label>
                     <input type="text" name="nombre" required class="inv-search" value="${esEdit ? item.nombre : ''}" style="margin-bottom:10px;">
+                    
                     <label style="font-size:11px; font-weight:bold;">COLOR</label>
                     <input type="text" name="color" required class="inv-search" value="${esEdit ? item.color : ''}" style="margin-bottom:15px;">
+                    
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px;">
                         <select name="categoria" class="inv-search">${window.parametrosInv.categorias.map(c => `<option value="${c}" ${esEdit && item.categoria === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
                         <select name="unidad" class="inv-search">${window.parametrosInv.unidades.map(u => `<option value="${u}" ${esEdit && item.unidad_medida === u ? 'selected' : ''}>${u}</option>`).join('')}</select>
                     </div>
+
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px;">
                         <input type="number" name="cantidad" placeholder="Stock" required class="inv-search" value="${esEdit ? item.cantidad_actual : ''}">
                         <input type="number" name="costo" placeholder="Costo" required class="inv-search" value="${esEdit ? item.costo_promedio : ''}">
                     </div>
-                    <button type="button" class="inv-search" onclick="document.getElementById('f-cam-color').click()" style="margin-bottom:10px;">📷 Reemplazar/Tomar Foto</button>
-                    <input type="file" id="f-cam-color" accept="image/*" capture="environment" style="display:none;" onchange="previewImg(this)">
-                    <div id="prev-color" style="text-align:center; margin-bottom:10px;">
-                        ${esEdit && item.foto_url ? `<img src="${item.foto_url}" style="width:60px; border-radius:8px;" onerror="this.style.display='none'">` : ''}
+
+                    <label style="font-size:11px; font-weight:bold;">FOTO (CÁMARA)</label>
+                    <input type="file" id="f-cam-color" accept="image/*" capture="environment" style="display:none;" onchange="convertirYPrevisualizar(this)">
+                    <button type="button" class="inv-search" onclick="document.getElementById('f-cam-color').click()" style="margin-bottom:10px;">📷 Tomar Foto</button>
+                    
+                    <div id="prev-container" style="text-align:center; margin-bottom:15px;">
+                        <img id="img-render-prev" src="${base64Temp || ''}" style="width:80px; height:80px; object-fit:cover; border-radius:10px; display:${base64Temp ? 'inline-block' : 'none'}; border:1px solid #ddd;">
                     </div>
-                    <button type="submit" class="btn-primario" style="width:100%; padding:15px; border-radius:10px;">GUARDAR CAMBIOS</button>
+
+                    <button type="submit" class="btn-primario" style="width:100%; padding:15px; border-radius:10px;">${esEdit ? 'ACTUALIZAR' : 'GUARDAR'}</button>
                 </form>
             </div>
         </div>
     `;
     document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    window.convertirYPrevisualizar = (input) => {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                base64Temp = e.target.result; // Guardamos el base64 para mostrarlo ya
+                const imgPrev = document.getElementById('img-render-prev');
+                imgPrev.src = base64Temp;
+                imgPrev.style.display = 'inline-block';
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    };
 
     document.getElementById('form-insumo').onsubmit = async (e) => {
         e.preventDefault();
@@ -220,13 +233,14 @@ window.abrirModalInsumo = function(item = null) {
         const nom = fd.get('nombre').trim().toUpperCase();
         const col = fd.get('color').trim().toUpperCase();
         
-        // Actualizar ruta de imagen basándose en los nuevos datos
+        // Mantener la ruta de Git para la base de datos
         const gitPath = `assets/inventario/${nom.replace(/\s+/g, '_')}/${col.replace(/\s+/g, '_')}.jpg`;
 
         let payload = {
             nombre: nom, color: col, categoria: fd.get('categoria'), unidad_medida: fd.get('unidad'),
             cantidad_actual: Number(fd.get('cantidad')), costo_promedio: Number(fd.get('costo')),
-            stock_minimo: 2, ultima_actualizacion: new Date().toISOString(), foto_url: gitPath
+            stock_minimo: 2, ultima_actualizacion: new Date().toISOString(), 
+            foto_url: base64Temp || gitPath // Si tomamos foto nueva, se guarda el base64 temporalmente
         };
 
         if (esEdit) {
@@ -244,25 +258,6 @@ window.abrirModalInsumo = function(item = null) {
 // ==========================================
 // 4. UTILIDADES
 // ==========================================
-window.gestionarBtnMass = () => {
-    const n = document.querySelectorAll('.chk-item:checked').length;
-    document.getElementById('btn-delete-mass').style.display = n > 0 ? 'block' : 'none';
-    document.getElementById('count-sel').innerText = n;
-};
-
-window.eliminarSeleccionados = async () => {
-    const checks = document.querySelectorAll('.chk-item:checked');
-    let ids = [];
-    checks.forEach(c => {
-        if(c.classList.contains('chk-group')) ids = ids.concat(JSON.parse(c.dataset.ids));
-        else ids.push(c.value);
-    });
-    if(confirm(`¿Borrar permanentemente ${[...new Set(ids)].length} registros?`)) { 
-        await window.supabase.from('inventario_insumos').delete().in('id', ids); 
-        cargarDatosInventario(); 
-    }
-};
-
 window.zoomImg = (url) => { 
     if(!url || url.includes('flaticon')) return;
     document.getElementById('img-zoom').src = url;
@@ -282,27 +277,4 @@ window.filtrarInventario = () => {
     actualizarInterfaz(f);
 };
 
-window.previewImg = (input) => {
-    if (input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = (e) => document.getElementById('prev-color').innerHTML = `<img src="${e.target.result}" style="width:60px; border-radius:8px;">`;
-        reader.readAsDataURL(input.files[0]);
-    }
-};
-
-window.seleccionarTodo = (src) => { document.querySelectorAll('.chk-item').forEach(c => c.checked = src.checked); gestionarBtnMass(); };
 window.eliminarUno = async (id, nombre) => { if(confirm(`¿Borrar ${nombre}?`)) { await window.supabase.from('inventario_insumos').delete().eq('id', id); cargarDatosInventario(); } };
-
-window.exportarPDF = function() {
-    try {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('p', 'pt', 'a4');
-        const colorPrimario = [219, 19, 122];
-        doc.setFontSize(20);
-        doc.setTextColor(colorPrimario[0], colorPrimario[1], colorPrimario[2]);
-        doc.text("CUPISSA - REPORTE DE BODEGA", 40, 50);
-        const filas = window.inventarioGlobal.map(i => [i.referencia || 'S/R', i.nombre.toUpperCase(), (i.color || 'ÚNICO').toUpperCase(), i.categoria, i.cantidad_actual, `$${Number(i.costo_promedio).toLocaleString()}`, `$${(i.cantidad_actual * i.costo_promedio).toLocaleString()}`]);
-        doc.autoTable({ head: [['REF', 'PRODUCTO', 'COLOR', 'CAT', 'STOCK', 'COSTO', 'TOTAL']], body: filas, startY: 80, theme: 'grid', headStyles: { fillColor: colorPrimario } });
-        doc.save(`Inventario_Cupissa_${Date.now()}.pdf`);
-    } catch (e) { alert("Error al generar PDF."); }
-};
